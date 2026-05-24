@@ -36,7 +36,7 @@ class Client(db.Model):
             "alerte": self.alerte
         }
 
-# Interface HTML et JavaScript intégrée
+# --- Interface HTML / CSS / JavaScript intégrée ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -104,6 +104,212 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
   opacity: 0; pointer-events: none; transition: opacity 0.20s ease;
 }
 .modal-overlay.active { opacity: 1; pointer-events: auto; }
+.modal-box {
+  background: #111827; border: 1px solid #1F2937; border-radius: 20px;
+  padding: 24px; width: 92%; max-width: 410px; box-shadow: 0 20px 40px rgba(0,0,0,0.7);
+  max-height: 90vh; overflow-y: auto;
+  transform: scale(0.95); transition: transform 0.20s ease;
+}
+.modal-overlay.active .modal-box { transform: scale(1); }
+.modal-info { background: #1F2937; padding: 12px; border-radius: 10px; margin-top: 8px; font-size: 13px; color: #9CA3AF; border-left: 4px solid #3B82F6; }
+.hint-longpress { text-align: center; color: #6B7280; font-size: 11px; margin-top: 4px; }
+.alert-title { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.alert-text { font-size: 14px; color: #E5E7EB; text-align: center; margin-bottom: 20px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">📡</div>
+  <div>
+    <h1>Starlink ZJinfo</h1>
+    <p>Gestion WiFi - Base de données Cloud</p>
+  </div>
+</div>
+
+<div class="container">
+  <div class="stats">
+    <div class="stat-card"><div class="stat-label">Total Clients</div><div class="stat-value" id="total">0</div></div>
+    <div class="stat-card"><div class="stat-label">En Attente</div><div class="stat-value" style="color:#F59E0B" id="attente">0</div></div>
+    <div class="stat-card"><div class="stat-label">Actifs</div><div class="stat-value" style="color:#10B981" id="actifs">0</div></div>
+    <div class="stat-card"><div class="stat-label">Expirés</div><div class="stat-value" style="color:#EF4444" id="expires">0</div></div>
+    <div class="stat-card"><div class="stat-label">Encaissé</div><div class="stat-value" style="color:#3B82F6" id="caisse">0 Ar</div></div>
+  </div>
+
+  <div class="card">
+    <div class="list-title" style="margin-bottom:16px">👤 Ajouter un client</div>
+    <label>Nom du client</label>
+    <input id="nom" placeholder="Ex: zino">
+    
+    <label>Ajuster la durée</label>
+    <div class="time-input-container">
+      <div>
+        <span style="font-size:12px; color:#9CA3AF">Heure(s)</span>
+        <input id="ajoutHeures" type="number" placeholder="Ex: 1" min="0" oninput="calculerPrixAutomatique()">
+      </div>
+      <div>
+        <span style="font-size:12px; color:#9CA3AF">Minute(s)</span>
+        <input id="ajoutMinutes" type="number" placeholder="Ex: 5" min="0" max="59" oninput="calculerPrixAutomatique()">
+      </div>
+    </div>
+    
+    <label>Montant (Ariary)</label>
+    <input id="montant" type="number" placeholder="Ex: 1000" min="0">
+    
+    <label>Adresse MAC (optionnel)</label>
+    <input id="mac" placeholder="00:1A:2B:3C:4D:5E">
+    <button onclick="ajouter()">+ Ajouter le client</button>
+    <div class="sync-status">☁️ Toutes vos données sont sécurisées en ligne</div>
+  </div>
+
+  <div class="card">
+    <div class="list-header">
+      <div class="list-title">📋 Liste des clients</div>
+      <input class="search" placeholder="Rechercher..." id="search" oninput="filtrer()">
+    </div>
+    <p class="hint-longpress">💡 Appuyez longuement sur une ligne pour modifier les détails du client</p>
+    <div style="overflow-x:auto; margin-top:8px">
+    <table>
+      <thead>
+        <tr>
+          <th>DATE</th>
+          <th>NOM</th>
+          <th>FORFAIT</th>
+          <th>MONTANT</th>
+          <th>EXPIRE / CHRONO</th>
+          <th>STATUT</th>
+          <th>ACTIONS</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="prolongarModal">
+  <div class="modal-box">
+    <div class="list-title" id="prolongarTitre" style="color:#10B981">🕒 Ajouter du temps</div>
+    <div class="modal-info" id="modalEtatActuel">Calcul...</div>
+    <label>Temps additionnel</label>
+    <div class="edit-time-grid">
+      <div><span style="font-size:12px; color:#9CA3AF">Heure(s)</span><input id="modalHeures" type="number" placeholder="0" min="0" oninput="calculerPrixAutomatiqueModal()"></div>
+      <div><span style="font-size:12px; color:#9CA3AF">Minute(s)</span><input id="modalMinutes" type="number" placeholder="30" min="0" oninput="calculerPrixAutomatiqueModal()"></div>
+    </div>
+    <label>Montant supplémentaire (Ar)</label>
+    <input id="modalMontant" type="number" value="500" min="0">
+    <div class="btn-group">
+      <button class="btn-green" onclick="validerProlongation()">Valider</button>
+      <button class="btn-secondary" onclick="fermerModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="list-title" id="editModalTitre" style="color:#3B82F6">📝 Modifier la fiche</div>
+    <div class="modal-info" id="editModalEtatActuel">Calcul...</div>
+    <label>Nom du client</label>
+    <input id="editNom">
+    <label>Ajuster la durée</label>
+    <div class="edit-time-grid">
+      <div><span style="font-size:12px; color:#9CA3AF">Heure(s)</span><input id="editHeures" type="number" min="0"></div>
+      <div><span style="font-size:12px; color:#9CA3AF">Minute(s)</span><input id="editMinutes" type="number" min="0" max="59"></div>
+    </div>
+    <label>Montant Global (Ar)</label>
+    <input id="editMontant" type="number" min="0">
+    <label>Adresse MAC</label>
+    <input id="editMac">
+    <label>Statut</label>
+    <select id="editStatut">
+      <option value="attente">En attente</option>
+      <option value="actif">Actif</option>
+      <option value="expiré">Expiré</option>
+    </select>
+    <div class="btn-group">
+      <button class="btn-green" onclick="validerEditionComplete()">Enregistrer</button>
+      <button class="btn-secondary" onclick="fermerModalEdit()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box" style="max-width: 350px;">
+    <div class="alert-title" style="color:#EF4444">🗑️ Supprimer le client</div>
+    <div class="alert-text" id="confirmModalText">Voulez-vous supprimer ce client ?</div>
+    <div class="btn-group">
+      <button class="btn-red" id="btnConfirmOk">Oui, Supprimer</button>
+      <button class="btn-secondary" onclick="fermerModalConfirm()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="alertModal">
+  <div class="modal-box" style="max-width: 380px; border-color: #EF4444;">
+    <div class="alert-title" style="color:#EF4444; animation: blink 1s infinite;">⏰ TEMPS EXPIRÉ !</div>
+    <div class="alert-text" id="alertModalText">Le forfait est terminé.</div>
+    <div class="modal-info" style="border-left-color: #EF4444; margin-bottom: 15px; text-align: center; color:#fff;">
+      ⚠️ Désactivez sa connexion sur l'antenne Starlink.
+    </div>
+    <button class="btn-red" onclick="fermerModalAlert()">Arrêter le son</button>
+  </div>
+</div>
+
+<script>
+let clients = [];
+let indexEnCours = null;
+let indexSuppressionEnCours = null;
+let alerteAudio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3'); 
+alerteAudio.loop = true;
+
+document.addEventListener('click', function() {
+  alerteAudio.play().then(() => { alerteAudio.pause(); alerteAudio.currentTime = 0; }).catch(() => {});
+}, { once: true });
+
+async function chargerDepuisServeur() {
+  try {
+    let response = await fetch('/api/clients');
+    clients = await response.json();
+    afficher();
+  } catch(e) { console.error("Erreur de connexion cloud", e); }
+}
+
+function calculerPrixAutomatique() {
+  let hInput = document.getElementById('ajoutHeures').value;
+  let mInput = document.getElementById('ajoutMinutes').value;
+  if(hInput === "" && mInput === "") { document.getElementById('montant').value = ""; return; }
+  let heures = parseInt(hInput) || 0; let minutes = parseInt(mInput) || 0;
+  document.getElementById('montant').value = (heures * 1000) + Math.round(minutes * (500 / 30));
+}
+
+function calculerPrixAutomatiqueModal() {
+  let heures = parseInt(document.getElementById('modalHeures').value) || 0;
+  let minutes = parseInt(document.getElementById('modalMinutes').value) || 0;
+  document.getElementById('modalMontant').value = (heures * 1000) + Math.round(minutes * (500 / 30));
+}
+
+function sonnerAlerte(nom, forfait){
+  alerteAudio.currentTime = 0; alerteAudio.play().catch(e => {});
+  if(navigator.vibrate) { navigator.vibrate([600, 250, 600]); }
+  document.getElementById('alertModalText').innerHTML = `Le forfait de <strong style="color:#3B82F6;">${nom}</strong> (${forfait}) est fini.`;
+  document.getElementById('alertModal').classList.add('active');
+}
+
+function fermerModalAlert() { alerteAudio.pause(); alerteAudio.currentTime = 0; document.getElementById('alertModal').classList.remove('active'); }
+
+function formatDate(d){
+  if(!d) return '-'; d = new Date(d);
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+
+function getCountdown(expire){
+  if(!expire) return '-';
+  let diff = new Date(expire) - new Date();
+  if(diff <= 0) return '<span class="countdown danger">Expiré</span>';
+  let h = Math.floor(diff/3600000); let m = Math.floor((diff%3600000)/60000); let s = Math.floor((diff%60000)/1000);
+  let className = diff < 300000 ? 'countdown danger' : diff < 900000 ? 'countdown warning' : 'countdown normal';
+  if(h > 0) return `<span class="${className}">${h}h ${m}m</span>`;
+  return `<span class="${className}">${m.modal-overlay.active { opacity: 1; pointer-events: auto; }
 .modal-box {
   background: #111827; border: 1px solid #1F2937; border-radius: 20px;
   padding: 24px; width: 92%; max-width: 410px; box-shadow: 0 20px 40px rgba(0,0,0,0.7);
