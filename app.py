@@ -8,8 +8,7 @@ from datetime import datetime
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'une_cle_secrete_tres_difficile_a_deviner_12345'
 
-# --- CORRECTION DE SÉCURITÉ POUR RENDER ---
-# Utilisation du dossier /tmp pour éviter l'effacement de la base de données au redémarrage
+# --- CONFIGURATION SÉCURISÉE DE LA BASE DE DONNÉES ---
 if os.environ.get('RENDER'):
     db_path = '/tmp/starlink.db'
 else:
@@ -59,7 +58,7 @@ class Client(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --- LE DESIGN D'AUTHENTIFICATION COMPLET ---
+# --- DESIGN D'AUTHENTIFICATION COMPLET ---
 AUTH_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -121,7 +120,7 @@ button:hover{background:#1D4ED8}
 </html>
 """
 
-# --- RESTE DU CODE (INTERFACE PRINCIPALE AVEC CLIC STATUT ET CAISSE TEMPORELLE) ---
+# --- DESIGN INTERFACE PRINCIPALE ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -183,7 +182,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 .countdown.danger{color:#EF4444;animation:blink 1s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
 @media(min-width:768px){.stats{grid-template-columns:repeat(5,1fr)}}
-.sync-status{font-size:12px;color:#10B981;text-align:center;margin-top:8px}
 .time-input-container {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
 .edit-time-grid {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
 
@@ -413,7 +411,7 @@ function filtrerParStatut(statut) {
   document.querySelectorAll('.stat-card').forEach(card => card.classList.remove('active-filter'));
   
   if (statut === 'tous') document.getElementById('card-all').classList.add('active-filter');
-  else if (statut === 'actif') document.getElementById('card-actif').classList.add('active-filter');
+  else if (statut === 'actif') document.getElementById('card-actifs').classList.add('active-filter');
   else if (statut === 'attente') document.getElementById('card-attente').classList.add('active-filter');
   else if (statut === 'expiré') document.getElementById('card-expiré').classList.add('active-filter');
   
@@ -580,7 +578,6 @@ async function activer(i){
   chargerPermanence();
 }
 
-function abrirModalConfirm(i) { ouvrirModalConfirm(i); }
 function ouvrirModalConfirm(i) { indexSuppressionEnCours = i; document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; document.getElementById('btnConfirmOk').onclick = validerSuppression; document.getElementById('confirmModal').classList.add('active'); }
 
 async function validerSuppression() {
@@ -617,7 +614,7 @@ window.onload = chargerPermanence;
 </html>
 """
 
-# --- LOGIQUE BACKEND ---
+# --- LOGIQUE BACKEND AVEC AUTO-ADMIN ---
 @app.route('/')
 @login_required
 def index():
@@ -689,4 +686,9 @@ def api_client_detail(cid):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        # --- ENREGISTREMENT SÉCURISÉ DE L'ADMIN PAR DÉFAUT ---
+        if not User.query.filter_by(username='admin').first():
+            admin_user = User(username='admin', password=generate_password_hash('admin123'))
+            db.session.add(admin_user)
+            db.session.commit()
     app.run(debug=True)
