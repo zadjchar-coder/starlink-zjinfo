@@ -53,7 +53,7 @@ class Client(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 _db_initialized = False
 
@@ -393,7 +393,7 @@ let clients = [];
 let statutFiltreActuel = 'tous';
 let indexEnCours = null;
 let indexSuppressionEnCours = null;
-let ignoreNextClick = false; // Verrou anti-conflit
+let ignoreNextClick = false; 
 let alerteAudio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3'); 
 alerteAudio.loop = true;
 
@@ -578,13 +578,12 @@ function attacherEvenementsAppuiLong() {
     let index = row.getAttribute('data-index');
     
     let startPress = (e) => {
-      // Si la cible touchée est un bouton, on ignore l'appui long
       if(e.target.tagName.toLowerCase() === 'button') return;
       
       ignoreNextClick = false;
       clearTimeout(timerAppuiLong);
       timerAppuiLong = setTimeout(() => {
-        ignoreNextClick = true; // Empêche le clic normal après l'ouverture du modal
+        ignoreNextClick = true; 
         ouvrirModalEditionComplete(index);
       }, 700);
     };
@@ -800,7 +799,9 @@ def add_client():
 @app.route('/api/clients/<int:id>', methods=['PUT'])
 @login_required
 def update_client(id):
-    c = Client.query.get_or_404(id)
+    c = db.session.get(Client, id)
+    if not c:
+        return jsonify({"error": "Client introuvable"}), 404
     data = request.json
     if 'nom' in data: c.nom = data['nom']
     if 'forfait' in data: c.forfait = data['forfait']
@@ -815,7 +816,9 @@ def update_client(id):
 @app.route('/api/clients/<int:id>', methods=['DELETE'])
 @login_required
 def delete_client(id):
-    c = Client.query.get_or_404(id)
+    c = db.session.get(Client, id)
+    if not c:
+        return jsonify({"error": "Client introuvable"}), 404
     db.session.delete(c)
     db.session.commit()
     return jsonify({"success": True})
