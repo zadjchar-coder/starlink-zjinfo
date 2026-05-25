@@ -54,7 +54,7 @@ class Client(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --- DESIGN DES PAGES D'AUTHENTIFICATION (CONNEXION / INSCRIPTION) ---
+# --- DESIGN DES PAGES D'AUTHENTIFICATION ---
 AUTH_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -116,7 +116,7 @@ button:hover{background:#1D4ED8}
 </html>
 """
 
-# --- INTERFACE PRINCIPALE (TABLEAU DE BORD PROTEGÉ) ---
+# --- INTERFACE PRINCIPALE PROTECTION TABLEAU DE BORD ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -151,10 +151,13 @@ button:active{transform:scale(0.98)}
 .btn-red{background:#EF4444}
 .btn-red:hover{background:#DC2626}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
-.stat-card{background:#111827;border:1px solid #1F2937;border-radius:16px;padding:16px;transition:0.2s}
-.stat-card:hover{border-color:#3B82F6}
+.stat-card{background:#111827;border:1px solid #1F2937;border-radius:16px;padding:16px;transition:0.2s;cursor:pointer}
+.stat-card:hover{border-color:#3B82F6;background:#1F2937}
+.stat-card.active-filter{border-color:#2563EB;background:#1C2541}
 .stat-label{color:#9CA3AF;font-size:13px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px}
 .stat-value{font-size:26px;font-weight:700}
+.caisse-detail {font-size: 11px; color: #9CA3AF; margin-top: 6px; border-top: 1px solid #1F2937; padding-top: 6px; text-align: left; line-height: 1.5;}
+.caisse-detail span {color: #E5E7EB; font-weight: 600;}
 .list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
 .list-title{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600}
 .search{background:#1F2937;border:1px solid #374151;border-radius:10px;padding:10px 14px;color:#fff;width:160px;font-size:14px}
@@ -162,7 +165,6 @@ button:active{transform:scale(0.98)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{color:#9CA3AF;text-align:left;padding:14px 8px;font-weight:600;border-bottom:2px solid #1F2937;text-transform:uppercase;font-size:11px;letter-spacing:0.5px}
 td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align:middle}
-.row-client{cursor:pointer}
 .row-client:hover td{background:#1F2937}
 .badge{padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase}
 .badge-attente{background:#FEF3C7;color:#92400E}
@@ -215,11 +217,19 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 
 <div class="container">
   <div class="stats">
-    <div class="stat-card"><div class="stat-label">Total Clients</div><div class="stat-value" id="total">0</div></div>
-    <div class="stat-card"><div class="stat-label">En Attente</div><div class="stat-value" style="color:#F59E0B" id="attente">0</div></div>
-    <div class="stat-card"><div class="stat-label">Actifs</div><div class="stat-value" style="color:#10B981" id="actifs">0</div></div>
-    <div class="stat-card"><div class="stat-label">Expirés</div><div class="stat-value" style="color:#EF4444" id="expires">0</div></div>
-    <div class="stat-card"><div class="stat-label">Encaissé</div><div class="stat-value" style="color:#3B82F6" id="caisse">0 Ar</div></div>
+    <div class="stat-card" id="card-all" onclick="filtrerParStatut('tous')"><div class="stat-label">Total Clients</div><div class="stat-value" id="total">0</div></div>
+    <div class="stat-card" id="card-attente" onclick="filtrerParStatut('attente')"><div class="stat-label">En Attente</div><div class="stat-value" style="color:#F59E0B" id="attente">0</div></div>
+    <div class="stat-card" id="card-actif" onclick="filtrerParStatut('actif')"><div class="stat-label">Actifs</div><div class="stat-value" style="color:#10B981" id="actifs">0</div></div>
+    <div class="stat-card" id="card-expiré" onclick="filtrerParStatut('expiré')"><div class="stat-label">Expirés</div><div class="stat-value" style="color:#EF4444" id="expires">0</div></div>
+    <div class="stat-card" id="card-caisse" onclick="filtrerParStatut('tous')">
+      <div class="stat-label">Encaissé Total</div>
+      <div class="stat-value" style="color:#3B82F6" id="caisse">0 Ar</div>
+      <div class="caisse-detail">
+        Jour : <span id="caisse-jour">0 Ar</span><br>
+        Mois : <span id="caisse-mois">0 Ar</span><br>
+        An : <span id="caisse-an">0 Ar</span>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -250,7 +260,7 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 
   <div class="card">
     <div class="list-header">
-      <div class="list-title">📋 Liste des clients</div>
+      <div class="list-title" id="titre-liste-clients">📋 Liste des clients</div>
       <input class="search" placeholder="Rechercher..." id="search" oninput="filtrer()">
     </div>
     <p class="hint-longpress">💡 Appuyez longuement sur une ligne pour modifier les détails du client</p>
@@ -343,6 +353,7 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 
 <script>
 let clients = [];
+let statutFiltreActuel = 'tous';
 let indexEnCours = null;
 let indexSuppressionEnCours = null;
 let alerteAudio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3'); 
@@ -397,12 +408,35 @@ function getCountdown(expire){
   return `<span class="${className}">${m}:${s.toString().padStart(2,'0')}</span>`;
 }
 
-function afficher(filtre=''){
+function filtrerParStatut(statut) {
+  statutFiltreActuel = statut;
+  document.querySelectorAll('.stat-card').forEach(card => card.classList.remove('active-filter'));
+  
+  if (statut === 'tous') document.getElementById('card-all').classList.add('active-filter');
+  else if (statut === 'actif') document.getElementById('card-actif').classList.add('active-filter');
+  else if (statut === 'attente') document.getElementById('card-attente').classList.add('active-filter');
+  else if (statut === 'expiré') document.getElementById('card-expiré').classList.add('active-filter');
+  
+  let titreText = "📋 Liste des clients";
+  if (statut !== 'tous') titreText += ` (${statut}s)`;
+  document.getElementById('titre-liste-clients').textContent = titreText;
+
+  afficher(document.getElementById('search').value);
+}
+
+function afficher(filtreTexte=''){
   let html = '';
-  let liste = clients.filter(c => c.nom.toLowerCase().includes(filtre.toLowerCase()));
+  let liste = clients;
+  if (statutFiltreActuel !== 'tous') {
+    liste = liste.filter(c => c.statut === statutFiltreActuel);
+  }
+  
+  if (filtreTexte) {
+    liste = liste.filter(c => c.nom.toLowerCase().includes(filtreTexte.toLowerCase()));
+  }
 
   if(liste.length === 0){
-    html = `<tr><td colspan="7" class="empty">Aucun client trouvé</td></tr>`;
+    html = `<tr><td colspan="7" class="empty">Aucun client trouvé dans cette catégorie</td></tr>`;
   } else {
     liste.forEach((c)=>{
       let idx = clients.indexOf(c);
@@ -427,11 +461,36 @@ function afficher(filtre=''){
   }
 
   document.getElementById('tbody').innerHTML = html;
+  
+  // LOGIQUE CALCUL DE LA CAISSE PAR JOUR, MOIS, ANNEE
+  let maintenant = new Date();
+  let totalJour = 0, totalMois = 0, totalAn = 0;
+
+  clients.forEach(c => {
+    if (!c.date) return;
+    let dateClient = new Date(c.date);
+    let montant = parseInt(c.montant) || 0;
+
+    if (dateClient.getFullYear() === maintenant.getFullYear()) {
+      totalAn += montant;
+      if (dateClient.getMonth() === maintenant.getMonth()) {
+        totalMois += montant;
+        if (dateClient.getDate() === maintenant.getDate()) {
+          totalJour += montant;
+        }
+      }
+    }
+  });
+
   document.getElementById('total').textContent = clients.length;
   document.getElementById('attente').textContent = clients.filter(c=>c.statut==='attente').length;
   document.getElementById('actifs').textContent = clients.filter(c=>c.statut==='actif').length;
   document.getElementById('expires').textContent = clients.filter(c=>c.statut==='expiré').length;
   document.getElementById('caisse').textContent = clients.reduce((sum,c)=>sum+parseInt(c.montant||0),0).toLocaleString('fr-FR')+' Ar';
+
+  document.getElementById('caisse-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
+  document.getElementById('caisse-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
+  document.getElementById('caisse-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
 
   attacherEvenementsAppuiLong();
 }
@@ -560,6 +619,7 @@ async function validerProlongation() {
 }
 
 function fermerModal() { document.getElementById('prolongarModal').classList.remove('active'); indexEnCours = null; }
+function abrirModalConfirm(i) { ouvrirModalConfirm(i); } // Fallback sécurisé pour l'ancienne liaison
 function ouvrirModalConfirm(i) { indexSuppressionEnCours = i; document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; document.getElementById('btnConfirmOk').onclick = validerSuppression; document.getElementById('confirmModal').classList.add('active'); }
 
 async function validerSuppression() {
@@ -597,49 +657,39 @@ window.onload = chargerPermanence;
 </html>
 """
 
-# --- ROUTES D'AUTHENTIFICATION ---
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    if request.method == 'POST':
-        username = request.form.get('username').strip()
-        password = request.form.get('password')
-        
-        user_exists = User.query.filter_by(username=username).first()
-        if user_exists:
-            flash("Ce nom d'utilisateur est déjà pris.")
-            return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer mon compte", action="register")
-        
-        # Cryptage du mot de passe
-        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-        new_user = User(username=username, password=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
-        
-        flash("Compte créé avec succès ! Connectez-vous.")
-        return redirect(url_for('login'))
-        
-    return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer mon compte", action="register")
+# --- ROUTES LOGIQUE BACKEND ---
+@app.route('/')
+@login_required
+def index():
+    return render_template_string(HTML_CONTENT)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        username = request.form.get('username').strip()
-        password = request.form.get('password')
-        
-        user = User.query.filter_by(username=username).first()
-        if not user or not check_password_hash(user.password, password):
-            flash("Identifiants incorrects. Veuillez réessayer.")
-            return render_template_string(AUTH_HTML, title="Connexion", btn_text="Se connecter", action="login")
-        
-        login_user(user)
-        return redirect(url_for('index'))
-        
+        u = User.query.filter_by(username=request.form['username']).first()
+        if u and check_password_hash(u.password, request.form['password']):
+            login_user(u)
+            return redirect(url_for('index'))
+        flash("Identifiants incorrects.")
     return render_template_string(AUTH_HTML, title="Connexion", btn_text="Se connecter", action="login")
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        exist = User.query.filter_by(username=request.form['username']).first()
+        if exist:
+            flash("Ce nom d'utilisateur est déjà pris.")
+            return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer le compte", action="register")
+        h = generate_password_hash(request.form['password'])
+        new_u = User(username=request.form['username'], password=h)
+        db.create_all()
+        db.session.add(new_u)
+        db.session.commit()
+        login_user(new_u)
+        return redirect(url_for('index'))
+    return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer le compte", action="register")
 
 @app.route('/logout')
 @login_required
@@ -647,65 +697,37 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# --- ROUTES DE L'APPLICATION PRINCIPALE (PROTÉGÉES PAR @LOGIN_REQUIRED) ---
-
-@app.route('/')
+@app.route('/api/clients', methods=['GET', 'POST'])
 @login_required
-def index():
-    return render_template_string(HTML_CONTENT)
+def api_clients():
+    if request.method == 'POST':
+        data = request.json
+        c = Client(nom=data['nom'], forfait=data['forfait'], montant=data['montant'], mac=data.get('mac'))
+        db.session.add(c)
+        db.session.commit()
+        return jsonify(c.to_dict())
+    return jsonify([c.to_dict() for c in Client.query.order_by(Client.id.desc()).all()])
 
-@app.route('/api/clients', methods=['GET'])
+@app.route('/api/clients/<int:cid>', methods=['PUT', 'DELETE'])
 @login_required
-def get_clients():
-    try:
-        clients = Client.query.order_by(Client.date.desc()).all()
-        return jsonify([c.to_dict() for c in clients])
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/clients', methods=['POST'])
-@login_required
-def add_client():
-    data = request.get_json()
-    new_client = Client(
-        nom=data['nom'],
-        forfait=data['forfait'],
-        montant=data['montant'],
-        mac=data.get('mac', '')
-    )
-    db.session.add(new_client)
+def api_client_detail(cid):
+    c = Client.query.get_or_404(cid)
+    if request.method == 'DELETE':
+        db.session.delete(c)
+        db.session.commit()
+        return jsonify({"success": True})
+    data = request.json
+    if 'nom' in data: c.nom = data['nom']
+    if 'montant' in data: c.montant = data['montant']
+    if 'mac' in data: c.mac = data['mac']
+    if 'statut' in data: c.statut = data['statut']
+    if 'forfait' in data: c.forfait = data['forfait']
+    if 'expire' in data: c.expire = data['expire']
+    if 'alerte' in data: c.alerte = data['alerte']
     db.session.commit()
-    return jsonify(new_client.to_dict()), 201
-
-@app.route('/api/clients/<int:id>', methods=['PUT'])
-@login_required
-def update_client(id):
-    client = Client.query.get_or_404(id)
-    data = request.get_json()
-    
-    if 'nom' in data: client.nom = data['nom']
-    if 'forfait' in data: client.forfait = data['forfait']
-    if 'montant' in data: client.montant = data['montant']
-    if 'mac' in data: client.mac = data['mac']
-    if 'statut' in data: client.statut = data['statut']
-    if 'expire' in data: client.expire = data['expire']
-    if 'alerte' in data: client.alerte = data['alerte']
-    
-    db.session.commit()
-    return jsonify(client.to_dict())
-
-@app.route('/api/clients/<int:id>', methods=['DELETE'])
-@login_required
-def delete_client(id):
-    client = Client.query.get_or_404(id)
-    db.session.delete(client)
-    db.session.commit()
-    return jsonify({"message": "Client supprime"}), 200
-
-# Création automatique des tables (Client et User) au démarrage
-with app.app_context():
-    db.create_all()
+    return jsonify(c.to_dict())
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
