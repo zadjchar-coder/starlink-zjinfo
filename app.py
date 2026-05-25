@@ -3,12 +3,12 @@ from flask import Flask, render_template_string, request, jsonify, redirect, url
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'une_cle_secrete_tres_difficile_a_deviner_12345'
 
-# --- CONFIGURATION SÉCURISÉE DE LA BASE DE DONNÉES ---
+# --- CONFIGURATION DE LA BASE DE DONNÉES ---
 if os.environ.get('RENDER'):
     db_path = '/tmp/starlink.db'
 else:
@@ -18,18 +18,15 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# Configuration de Flask-Login
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
 
-# Modèle de données pour les Utilisateurs (Comptes Administrateurs)
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(250), nullable=False)
 
-# Modèle de données pour la table Client
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.String(50), default=lambda: datetime.utcnow().isoformat())
@@ -58,7 +55,6 @@ class Client(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --- INITIALISATION AUTOMATIQUE DES TABLES ---
 _db_initialized = False
 
 @app.before_request
@@ -72,7 +68,6 @@ def initialize_database_if_needed():
             db.session.commit()
         _db_initialized = True
 
-# --- DESIGN D'AUTHENTIFICATION ---
 AUTH_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -129,7 +124,6 @@ button:hover{background:#1D4ED8}
 </html>
 """
 
-# --- DESIGN INTERFACE PRINCIPALE ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -163,8 +157,6 @@ button:active{transform:scale(0.98)}
 .btn-green:hover{background:#059669}
 .btn-red{background:#EF4444}
 .btn-red:hover{background:#DC2626}
-
-/* RE-CONCEPTION DES CARTES STATS AVEC POSITION RELATIVE POUR LES POPUPS */
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
 .stat-card{background:#111827;border:1px solid #1F2937;border-radius:16px;padding:16px;transition:0.2s;cursor:pointer;position:relative}
 .stat-card:hover{border-color:#3B82F6;background:#1F2937}
@@ -173,8 +165,6 @@ button:active{transform:scale(0.98)}
 .stat-value{font-size:26px;font-weight:700}
 .caisse-detail {font-size: 11px; color: #9CA3AF; margin-top: 6px; border-top: 1px solid #1F2937; padding-top: 6px; text-align: left; line-height: 1.5;}
 .caisse-detail span {color: #E5E7EB; font-weight: 600;}
-
-/* STYLE DU NOUVEAU POPUP FLOTTANT AU SURVOL */
 .popup-hover {
   position: absolute; top: 105%; left: 50%; transform: translateX(-50%);
   background: #1F2937; border: 1px solid #374151; padding: 12px; min-width: 180px;
@@ -185,7 +175,6 @@ button:active{transform:scale(0.98)}
 .popup-item { font-size: 13px; padding: 3px 0; border-bottom: 1px dashed #2D3748; color: #E5E7EB; }
 .popup-item:last-child { border-bottom: none; }
 .stat-card:hover .popup-hover { display: block; }
-
 .list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
 .list-title{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600}
 .search{background:#1F2937;border:1px solid #374151;border-radius:10px;padding:10px 14px;color:#fff;width:160px;font-size:14px}
@@ -208,11 +197,9 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 @media(min-width:768px){.stats{grid-template-columns:repeat(5,1fr)}}
 .time-input-container {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
 .edit-time-grid {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
-
 .benefice-table th { background: #1F2937; color: #3B82F6; font-size: 13px; padding: 16px 12px; }
 .benefice-table td { font-size: 15px; padding: 16px 12px; font-weight: 500; }
 .valeur-gain { color: #10B981; font-weight: 700; font-family: 'Courier New', monospace; }
-
 .modal-overlay {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(5, 8, 22, 0.85); backdrop-filter: blur(4px);
@@ -406,6 +393,7 @@ let clients = [];
 let statutFiltreActuel = 'tous';
 let indexEnCours = null;
 let indexSuppressionEnCours = null;
+let isLongPressing = false;
 let alerteAudio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3'); 
 alerteAudio.loop = true;
 
@@ -466,7 +454,6 @@ function getCountdown(expire){
   return `<span class="${className}">${m}:${s.toString().padStart(2,'0')}</span>`;
 }
 
-// LE CLIC FILTRE LA TABLE, LE SURVOL N'AFFICHE QUE LE POPUP SANS TOUCHER LA TABLE PRINCIPALE
 function filtrerParStatut(statut) {
   statutFiltreActuel = statut;
   if (document.getElementById('vue-clients').style.display === 'none') return;
@@ -500,9 +487,9 @@ function afficher(filtreTexte=''){
       let badge = c.statut==='actif'?'badge-actif':c.statut==='attente'?'badge-attente':'badge-expire';
       
       let actions = c.statut==='attente' 
-        ? `<button class="btn-sm btn-green" onclick="event.stopPropagation(); activer(${idx})">Activer</button>`
-        : `<button class="btn-sm btn-green" onclick="event.stopPropagation(); relancerOptionnel(${idx})">Relancer</button>`;
-      actions += `<button class="btn-sm btn-red" onclick="event.stopPropagation(); ouvrirModalConfirm(${idx})">Suppr</button>`;
+        ? `<button class="btn-sm btn-green" onclick="activer(event, ${idx})">Activer</button>`
+        : `<button class="btn-sm btn-green" onclick="relancerOptionnel(event, ${idx})">Relancer</button>`;
+      actions += `<button class="btn-sm btn-red" onclick="ouvrirModalConfirm(event, ${idx})">Suppr</button>`;
 
       let expireDisplay = c.statut==='actif'? getCountdown(c.expire) : formatDate(c.expire);
 
@@ -520,7 +507,6 @@ function afficher(filtreTexte=''){
 
   document.getElementById('tbody').innerHTML = html;
   
-  // LOGIQUE DE CALCULS ET CONSTITUTION DES LISTES POPUPS
   let maintenant = new Date();
   let totalOrigine = 0;
   let totalJour = 0, txJour = 0;
@@ -540,7 +526,6 @@ function afficher(filtreTexte=''){
     let montant = parseInt(c.montant) || 0;
     totalOrigine += montant;
 
-    // Remplissage des listes pour Popups
     let itemHtml = `<div class="popup-item">👤 ${c.nom} <span style="font-size:11px;color:#9CA3AF">(${c.forfait})</span></div>`;
     listeAll.push(itemHtml);
     if(c.statut === 'attente') listeAttente.push(itemHtml);
@@ -561,13 +546,11 @@ function afficher(filtreTexte=''){
     }
   });
 
-  // Injection des données dans les fenêtres flottantes (popups)
   document.getElementById('pop-all').innerHTML = listeAll.join('') || 'Aucun client';
   document.getElementById('pop-attente').innerHTML = listeAttente.join('') || 'Aucun client';
   document.getElementById('pop-actifs').innerHTML = listeActif.join('') || 'Aucun client actif';
   document.getElementById('pop-expires').innerHTML = listeExpire.join('') || 'Aucun forfait expiré';
 
-  // Mise à jour des compteurs card
   document.getElementById('total').textContent = clients.length;
   document.getElementById('attente').textContent = clients.filter(c=>c.statut==='attente').length;
   document.getElementById('actifs').textContent = clients.filter(c=>c.statut==='actif').length;
@@ -577,10 +560,9 @@ function afficher(filtreTexte=''){
   document.getElementById('caisse-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('caisse-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
 
-  // Vue bénéfices complète
   document.getElementById('gain-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-jour').textContent = txJour + ' txn';
-  document.getElementById('gain-semaine').textContent = totalSemaine.toLocaleString('fr-FR') + ' Ar';
+  document.getElementById('gain-semaine').textContent = totalSemaine.toLocaleString('fr-FR) + ' Ar';
   document.getElementById('count-semaine').textContent = txSemaine + ' txn';
   document.getElementById('gain-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-mois').textContent = txMois + ' txn';
@@ -594,12 +576,24 @@ let timerAppuiLong;
 function attacherEvenementsAppuiLong() {
   document.querySelectorAll('.client-row-element').forEach(row => {
     let index = row.getAttribute('data-index');
-    row.addEventListener('touchstart', () => { clearTimeout(timerAppuiLong); timerAppuiLong = setTimeout(() => { ouvrirModalEditionComplete(index); }, 700); }, { passive: true });
-    row.addEventListener('touchend', () => clearTimeout(timerAppuiLong));
-    row.addEventListener('touchmove', () => clearTimeout(timerAppuiLong));
-    row.addEventListener('mousedown', () => { clearTimeout(timerAppuiLong); timerAppuiLong = setTimeout(() => { ouvrirModalEditionComplete(index); }, 700); });
-    row.addEventListener('mouseup', () => clearTimeout(timerAppuiLong));
-    row.addEventListener('mouseleave', () => clearTimeout(timerAppuiLong));
+    
+    let startPress = () => {
+      isLongPressing = false;
+      clearTimeout(timerAppuiLong);
+      timerAppuiLong = setTimeout(() => {
+        isLongPressing = true;
+        ouvrirModalEditionComplete(index);
+      }, 700);
+    };
+
+    let endPress = () => { clearTimeout(timerAppuiLong); };
+
+    row.addEventListener('touchstart', startPress, { passive: true });
+    row.addEventListener('touchend', endPress);
+    row.addEventListener('touchmove', endPress);
+    row.addEventListener('mousedown', startPress);
+    row.addEventListener('mouseup', endPress);
+    row.addEventListener('mouseleave', endPress);
   });
 }
 
@@ -664,7 +658,10 @@ async function ajouter(){
   chargerPermanence();
 }
 
-async function activer(i){
+async function activer(e, i){
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  if (isLongPressing) return;
+  
   let c = clients[i]; let now = new Date(); let totalMin = 0;
   if(c.forfait){
     c.forfait.split('+').forEach(seg => {
@@ -677,7 +674,10 @@ async function activer(i){
   chargerPermanence();
 }
 
-async function relancerOptionnel(i) {
+async function relancerOptionnel(e, i) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  if (isLongPressing) return;
+  
   let c = clients[i]; let now = new Date(); let totalMin = 0;
   if(c.forfait){
     c.forfait.split('+').forEach(seg => {
@@ -690,7 +690,15 @@ async function relancerOptionnel(i) {
   chargerPermanence();
 }
 
-function ouvrirModalConfirm(i) { indexSuppressionEnCours = i; document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; document.getElementById('btnConfirmOk').onclick = validerSuppression; document.getElementById('confirmModal').classList.add('active'); }
+function ouvrirModalConfirm(e, i) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  if (isLongPressing) return;
+  
+  indexSuppressionEnCours = i; 
+  document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; 
+  document.getElementById('btnConfirmOk').onclick = validerSuppression; 
+  document.getElementById('confirmModal').classList.add('active'); 
+}
 
 async function validerSuppression() {
   if (indexSuppressionEnCours !== null) {
@@ -784,12 +792,12 @@ def add_client():
     )
     db.session.add(c)
     db.session.commit()
-    return jsonify(c.to_dict()), 210
+    return jsonify(c.to_dict()), 201
 
 @app.route('/api/clients/<int:id>', methods=['PUT'])
 @login_required
 def update_client(id):
-    c = Client.query.get_or_400(id)
+    c = Client.query.get_or_404(id)
     data = request.json
     if 'nom' in data: c.nom = data['nom']
     if 'forfait' in data: c.forfait = data['forfait']
@@ -804,7 +812,7 @@ def update_client(id):
 @app.route('/api/clients/<int:id>', methods=['DELETE'])
 @login_required
 def delete_client(id):
-    c = Client.query.get_or_400(id)
+    c = Client.query.get_or_404(id)
     db.session.delete(c)
     db.session.commit()
     return jsonify({"success": True})
