@@ -165,16 +165,19 @@ button:active{transform:scale(0.98)}
 .stat-value{font-size:26px;font-weight:700}
 .caisse-detail {font-size: 11px; color: #9CA3AF; margin-top: 6px; border-top: 1px solid #1F2937; padding-top: 6px; text-align: left; line-height: 1.5;}
 .caisse-detail span {color: #E5E7EB; font-weight: 600;}
+
+/* Style optimisé pour la bulle popup de survol */
 .popup-hover {
   position: absolute; top: 105%; left: 50%; transform: translateX(-50%);
-  background: #1F2937; border: 1px solid #374151; padding: 12px; min-width: 180px;
-  max-width: 240px; border-radius: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.6);
-  z-index: 99; display: none; max-height: 180px; overflow-y: auto; text-align: left;
+  background: #1F2937; border: 1px solid #374151; padding: 12px; min-width: 220px;
+  max-width: 280px; border-radius: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.6);
+  z-index: 99; display: none; max-height: 220px; overflow-y: auto; text-align: left;
 }
 .popup-hover h4 { font-size: 11px; color: #3B82F6; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #374151; padding-bottom: 4px; }
-.popup-item { font-size: 13px; padding: 3px 0; border-bottom: 1px dashed #2D3748; color: #E5E7EB; }
+.popup-item { font-size: 13px; padding: 5px 0; border-bottom: 1px dashed #2D3748; color: #E5E7EB; display: flex; justify-content: space-between; align-items: center; gap: 8px;}
 .popup-item:last-child { border-bottom: none; }
 .stat-card:hover .popup-hover { display: block; }
+
 .list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
 .list-title{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600}
 .search{background:#1F2937;border:1px solid #374151;border-radius:10px;padding:10px 14px;color:#fff;width:160px;font-size:14px}
@@ -217,28 +220,13 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 .alert-title { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .alert-text { font-size: 14px; color: #E5E7EB; text-align: center; margin-bottom: 20px; line-height: 1.5; }
 
-/* CSS pour le sélecteur d'actions stylisé */
 .select-action {
-  background: #1F2937;
-  color: #10B981;
-  border: 1px solid #374151;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  outline: none;
-  transition: all 0.2s;
-  width: 125px;
+  background: #1F2937; color: #10B981; border: 1px solid #374151;
+  padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  cursor: pointer; outline: none; transition: all 0.2s; width: 125px;
 }
-.select-action:hover {
-  border-color: #10B981;
-  background: #1C2541;
-}
-.select-action option {
-  background: #111827;
-  color: #fff;
-}
+.select-action:hover { border-color: #10B981; background: #1C2541; }
+.select-action option { background: #111827; color: #fff; }
 </style>
 </head>
 <body>
@@ -395,16 +383,13 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
   <div class="modal-box">
     <div class="list-title" style="color:#10B981">➕ Ajouter du Temps / Recharger</div>
     <p style="font-size:13px; color:#9CA3AF; margin-bottom:12px;" id="cumulModalInfos"></p>
-    
     <label>Durée additionnelle</label>
     <div class="edit-time-grid">
       <div><span style="font-size:12px; color:#9CA3AF">Heure(s)</span><input id="cumulHeures" type="number" min="0" placeholder="0" oninput="calculerPrixCumul()"></div>
       <div><span style="font-size:12px; color:#9CA3AF">Minute(s)</span><input id="cumulMinutes" type="number" min="0" max="59" placeholder="0" oninput="calculerPrixCumul()"></div>
     </div>
-    
     <label>Montant à ajouter (Ar)</label>
     <input id="cumulMontant" type="number" min="0" placeholder="Ex: 500">
-    
     <div class="btn-group">
       <button class="btn-green" onclick="validerCumulTemps()">Cumuler</button>
       <button class="btn-secondary" onclick="fermerModalCumul()">Annuler</button>
@@ -507,7 +492,6 @@ function getCountdown(expire){
 function filtrerParStatut(statut) {
   statutFiltreActuel = statut;
   if (document.getElementById('vue-clients').style.display === 'none') return;
-  
   document.querySelectorAll('.stat-card').forEach(card => card.classList.remove('active-filter'));
   
   if (statut === 'tous') document.getElementById('card-all').classList.add('active-filter');
@@ -518,7 +502,6 @@ function filtrerParStatut(statut) {
   let titreText = "📋 Liste des clients";
   if (statut !== 'tous') titreText += ` (${statut}s)`;
   document.getElementById('titre-liste-clients').textContent = titreText;
-
   afficher(document.getElementById('search').value);
 }
 
@@ -536,7 +519,6 @@ function afficher(filtreTexte=''){
       let idx = clients.indexOf(c);
       let badge = c.statut==='actif'?'badge-actif':c.statut==='attente'?'badge-attente':'badge-expire';
       
-      // CRÉATION DU BOUTON DE SÉLECTION (DROPDOWN) D'ACTIONS
       let dropdown = `<select class="select-action" onchange="gererActionDropdown(event, this, ${idx})">`;
       if (c.statut === 'attente') {
         dropdown += `<option value="" disabled selected style="color:#10B981;">▶️ Activer...</option>`;
@@ -547,7 +529,7 @@ function afficher(filtreTexte=''){
       }
       dropdown += `<option value="ajouter">➕ Ajouter Temps</option>`;
       dropdown += `<option value="modifier">📝 Modifier</option>`;
-      dropdown += `<option value="supprimer" style="color:#EF4444;">🗑️ Supprimer</option>`;
+      dropdown += `<option value="supprimer" style="color:#EF4444; font-weight:bold;">🗑️ Supprimer</option>`;
       dropdown += `</select>`;
 
       let expireDisplay = c.statut==='actif'? getCountdown(c.expire) : formatDate(c.expire);
@@ -566,60 +548,29 @@ function afficher(filtreTexte=''){
 
   document.getElementById('tbody').innerHTML = html;
   
-  // Recalcul des statistiques de caisse et popups
+  // Recalcul initial des chiffres globaux de la caisse
   let maintenant = new Date();
-  let totalOrigine = 0;
-  let totalJour = 0, txJour = 0;
-  let totalSemaine = 0, txSemaine = 0;
-  let totalMois = 0, txMois = 0;
-  let totalAn = 0, txAn = 0;
-
-  let listeAll = [], listeAttente = [], listeActif = [], listeExpire = [];
-
-  let uneSemaineAgo = new Date();
-  uneSemaineAgo.setDate(maintenant.getDate() - 7);
-  uneSemaineAgo.setHours(0,0,0,0);
+  let totalOrigine = 0, totalJour = 0, txJour = 0, totalSemaine = 0, txSemaine = 0, totalMois = 0, txMois = 0, totalAn = 0, txAn = 0;
+  let uneSemaineAgo = new Date(); uneSemaineAgo.setDate(maintenant.getDate() - 7); uneSemaineAgo.setHours(0,0,0,0);
 
   clients.forEach(c => {
     if (!c.date) return;
-    let dateClient = new Date(c.date);
-    let montant = parseInt(c.montant) || 0;
+    let dateClient = new Date(c.date); let montant = parseInt(c.montant) || 0;
     totalOrigine += montant;
-
-    let itemHtml = `<div class="popup-item">👤 ${c.nom} <span style="font-size:11px;color:#9CA3AF">(${c.forfait})</span></div>`;
-    listeAll.push(itemHtml);
-    if(c.statut === 'attente') listeAttente.push(itemHtml);
-    if(c.statut === 'actif') listeActif.push(itemHtml);
-    if(c.statut === 'expiré') listeExpire.push(itemHtml);
-
     if (dateClient.getFullYear() === maintenant.getFullYear()) {
       totalAn += montant; txAn++;
       if (dateClient.getMonth() === maintenant.getMonth()) {
         totalMois += montant; txMois++;
-        if (dateClient.getDate() === maintenant.getDate()) {
-          totalJour += montant; txJour++;
-        }
+        if (dateClient.getDate() === maintenant.getDate()) { totalJour += montant; txJour++; }
       }
     }
-    if (dateClient >= uneSemaineAgo) {
-      totalSemaine += montant; txSemaine++;
-    }
+    if (dateClient >= uneSemaineAgo) { totalSemaine += montant; txSemaine++; }
   });
 
-  document.getElementById('pop-all').innerHTML = listeAll.join('') || 'Aucun client';
-  document.getElementById('pop-attente').innerHTML = listeAttente.join('') || 'Aucun client';
-  document.getElementById('pop-actifs').innerHTML = listeActif.join('') || 'Aucun client actif';
-  document.getElementById('pop-expires').innerHTML = listeExpire.join('') || 'Aucun forfait expiré';
-
   document.getElementById('total').textContent = clients.length;
-  document.getElementById('attente').textContent = clients.filter(c=>c.statut==='attente').length;
-  document.getElementById('actifs').textContent = clients.filter(c=>c.statut==='actif').length;
-  document.getElementById('expires').textContent = clients.filter(c=>c.statut==='expiré').length;
   document.getElementById('caisse').textContent = totalOrigine.toLocaleString('fr-FR')+' Ar';
-
   document.getElementById('caisse-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('caisse-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
-
   document.getElementById('gain-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-jour').textContent = txJour + ' txn';
   document.getElementById('gain-semaine').textContent = totalSemaine.toLocaleString('fr-FR') + ' Ar';
@@ -629,122 +580,104 @@ function afficher(filtreTexte=''){
   document.getElementById('gain-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-an').textContent = txAn + ' txn';
 
+  // Lancement de la mise à jour dynamique immédiate des popups
+  mettreAJourPopupsChrono();
   attacherEvenementsAppuiLong();
 }
 
-// ROUTAGE DES SELECTIONS DU DROPDOWN
+// NOUVELLE FONCTION : Génère la liste des caractéristiques et calcul les chronos réels dans les popups
+function mettreAJourPopupsChrono() {
+  let popAll = [], popAttente = [], popActif = [], popExpire = [];
+
+  clients.forEach(c => {
+    let detailChrono = '';
+    if (c.statut === 'actif') {
+      detailChrono = `<span style="font-size:11px; margin-left:5px;">⏳ ${getCountdown(c.expire)}</span>`;
+    } else if (c.statut === 'attente') {
+      detailChrono = `<span style="font-size:11px; color:#F59E0B; margin-left:5px;">⏳ En attente</span>`;
+    } else {
+      detailChrono = `<span style="font-size:11px; color:#EF4444; margin-left:5px;">❌ Fini</span>`;
+    }
+
+    let itemHtml = `<div class="popup-item">
+      <div>👤 <strong>${c.nom}</strong> <span style="font-size:10px;color:#9CA3AF">[${c.forfait}]</span></div>
+      <div>${detailChrono}</div>
+    </div>`;
+
+    popAll.push(itemHtml);
+    if(c.statut === 'attente') popAttente.push(itemHtml);
+    if(c.statut === 'actif') popActif.push(itemHtml);
+    if(c.statut === 'expiré') popExpire.push(itemHtml);
+  });
+
+  document.getElementById('pop-all').innerHTML = popAll.join('') || '<div style="font-size:12px;color:#6B7280">Aucun client</div>';
+  document.getElementById('pop-attente').innerHTML = popAttente.join('') || '<div style="font-size:12px;color:#6B7280">Aucun client en attente</div>';
+  document.getElementById('pop-actifs').innerHTML = popActif.join('') || '<div style="font-size:12px;color:#6B7280">Aucun client actif</div>';
+  document.getElementById('pop-expires').innerHTML = popExpire.join('') || '<div style="font-size:12px;color:#6B7280">Aucun forfait expiré</div>';
+  
+  document.getElementById('attente').textContent = clients.filter(c=>c.statut==='attente').length;
+  document.getElementById('actifs').textContent = clients.filter(c=>c.statut==='actif').length;
+  document.getElementById('expires').textContent = clients.filter(c=>c.statut==='expiré').length;
+}
+
 function gererActionDropdown(event, selectElement, index) {
   event.stopPropagation();
   let action = selectElement.value;
   if (!action) return;
-
-  if (action === "activer") {
-    activer(null, index);
-  } else if (action === "relancer") {
-    relancerOptionnel(null, index);
-  } else if (action === "ajouter") {
-    ouvrirModalCumulTemps(index);
-  } else if (action === "modifier") {
-    ouvrirModalEditionComplete(index);
-  } else if (action === "supprimer") {
-    ouvrirModalConfirm(null, index);
-  }
-  
-  // Remettre le sélecteur à son affichage par défaut après action
+  if (action === "activer") activer(null, index);
+  else if (action === "relancer") relancerOptionnel(null, index);
+  else if (action === "ajouter") ouvrirModalCumulTemps(index);
+  else if (action === "modifier") ouvrirModalEditionComplete(index);
+  else if (action === "supprimer") ouvrirModalConfirm(null, index);
   selectElement.value = "";
 }
 
-// LOGIQUE POUR CUMULER LE TEMPS SUR UN FORFAIT EXISTANT
 function ouvrirModalCumulTemps(i) {
-  indexEnCours = parseInt(i);
-  let c = clients[indexEnCours];
-  if(!c) return;
+  indexEnCours = parseInt(i); let c = clients[indexEnCours]; if(!c) return;
   document.getElementById('cumulModalInfos').innerHTML = `Client: <strong>${c.nom}</strong><br>Forfait actuel: <span>${c.forfait}</span> | Solde: <span>${c.montant} Ar</span>`;
-  document.getElementById('cumulHeures').value = '';
-  document.getElementById('cumulMinutes').value = '';
-  document.getElementById('cumulMontant').value = '';
+  document.getElementById('cumulHeures').value = ''; document.getElementById('cumulMinutes').value = ''; document.getElementById('cumulMontant').value = '';
   document.getElementById('cumulModal').classList.add('active');
 }
-
-function fermerModalCumul() {
-  document.getElementById('cumulModal').classList.remove('active');
-  indexEnCours = null;
-}
+function fermerModalCumul() { document.getElementById('cumulModal').classList.remove('active'); indexEnCours = null; }
 
 async function validerCumulTemps() {
-  if (indexEnCours === null) return;
-  let c = clients[indexEnCours];
-  
+  if (indexEnCours === null) return; let c = clients[indexEnCours];
   let hAdd = parseInt(document.getElementById('cumulHeures').value) || 0;
   let mAdd = parseInt(document.getElementById('cumulMinutes').value) || 0;
   let montantAdd = parseInt(document.getElementById('cumulMontant').value) || 0;
-  
-  if ((hAdd === 0 && mAdd === 0) || montantAdd === 0) {
-    fermerModalCumul();
-    return;
-  }
+  if ((hAdd === 0 && mAdd === 0) || montantAdd === 0) { fermerModalCumul(); return; }
 
-  // 1. Calcul du nouveau libellé de forfait cumulé
   let texteAdditionnel = (hAdd > 0 ? hAdd + " Heure" + (hAdd>1?"s":"") : "") + (mAdd > 0 ? (hAdd>0?" + ":"") + mAdd + " min" : "");
   let nouveauForfait = c.forfait ? `${c.forfait} + ${texteAdditionnel}` : texteAdditionnel;
   let nouveauMontant = (parseInt(c.montant) || 0) + montantAdd;
-
-  // 2. Ajustement de la date d'expiration si le client est déjà en cours
-  let nouvelleExpiration = c.expire;
-  let nouveauStatut = c.statut;
+  let nouvelleExpiration = c.expire; let nouveauStatut = c.statut;
   
   if (c.statut === 'actif' && c.expire) {
-    let baseDate = new Date(c.expire);
-    // Si déjà expiré au moment du clic, on repart de l'heure actuelle
-    if (baseDate < new Date()) { baseDate = new Date(); }
-    baseDate.setHours(baseDate.getHours() + hAdd);
-    baseDate.setMinutes(baseDate.getMinutes() + mAdd);
+    let baseDate = new Date(c.expire); if (baseDate < new Date()) { baseDate = new Date(); }
+    baseDate.setHours(baseDate.getHours() + hAdd); baseDate.setMinutes(baseDate.getMinutes() + mAdd);
     nouvelleExpiration = baseDate.toISOString();
   } else if (c.statut === 'expiré') {
-    // Si expiré, ajouter du temps le repasse en 'actif' immédiatement
-    let baseDate = new Date();
-    baseDate.setHours(baseDate.getHours() + hAdd);
-    baseDate.setMinutes(baseDate.getMinutes() + mAdd);
-    nouvelleExpiration = baseDate.toISOString();
-    nouveauStatut = 'actif';
+    let baseDate = new Date(); baseDate.setHours(baseDate.getHours() + hAdd); baseDate.setMinutes(baseDate.getMinutes() + mAdd);
+    nouvelleExpiration = baseDate.toISOString(); nouveauStatut = 'actif';
   }
 
-  let payload = {
-    forfait: nouveauForfait,
-    montant: nouveauMontant,
-    statut: nouveauStatut,
-    expire: nouvelleExpiration,
-    alerte: false
-  };
-
   await fetch(`/api/clients/${c.id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ forfait: nouveauForfait, montant: nouveauMontant, statut: nouveauStatut, expire: nouvelleExpiration, alerte: false })
   });
-
-  fermerModalCumul();
-  chargerPermanence();
+  fermerModalCumul(); chargerPermanence();
 }
 
 let timerAppuiLong;
 function attacherEvenementsAppuiLong() {
   document.querySelectorAll('.client-row-element').forEach(row => {
     let index = row.getAttribute('data-index');
-    
     let startPress = (e) => {
       if(e.target.tagName.toLowerCase() === 'select' || e.target.tagName.toLowerCase() === 'option') return;
-      
-      ignoreNextClick = false;
-      clearTimeout(timerAppuiLong);
-      timerAppuiLong = setTimeout(() => {
-        ignoreNextClick = true; 
-        ouvrirModalEditionComplete(index);
-      }, 700);
+      ignoreNextClick = false; clearTimeout(timerAppuiLong);
+      timerAppuiLong = setTimeout(() => { ignoreNextClick = true; ouvrirModalEditionComplete(index); }, 700);
     };
-
     let endPress = () => { clearTimeout(timerAppuiLong); };
-
     row.addEventListener('touchstart', startPress, { passive: true });
     row.addEventListener('touchend', endPress);
     row.addEventListener('touchmove', endPress);
@@ -753,6 +686,8 @@ function attacherEvenementsAppuiLong() {
     row.addEventListener('mouseleave', endPress);
   });
 }
+
+function abrirModalConfirm(e, i) { ouvrirModalConfirm(e, i); }
 
 function ouvrirModalEditionComplete(i) {
   indexEnCours = parseInt(i); let c = clients[indexEnCours]; if(!c) return;
@@ -766,11 +701,8 @@ async function validerEditionComplete() {
   if(indexEnCours === null) return; let c = clients[indexEnCours];
   let h = parseInt(document.getElementById('editHeures').value) || 0;
   let m = parseInt(document.getElementById('editMinutes').value) || 0;
-  
   let texteForfait = c.forfait;
-  if(h > 0 || m > 0) {
-     texteForfait = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : "");
-  }
+  if(h > 0 || m > 0) { texteForfait = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : ""); }
   
   let payload = {
     nom: document.getElementById('editNom').value.trim(),
@@ -779,10 +711,8 @@ async function validerEditionComplete() {
     statut: document.getElementById('editStatut').value,
     forfait: texteForfait
   };
-
   if (payload.statut === 'actif') {
-    let baseDate = new Date();
-    baseDate.setHours(baseDate.getHours() + h); baseDate.setMinutes(baseDate.getMinutes() + m);
+    let baseDate = new Date(); baseDate.setHours(baseDate.getHours() + h); baseDate.setMinutes(baseDate.getMinutes() + m);
     payload.expire = baseDate.toISOString(); payload.alerte = false;
   } else if (payload.statut === 'expiré') {
     payload.expire = new Date().toISOString(); payload.alerte = true;
@@ -791,7 +721,6 @@ async function validerEditionComplete() {
   await fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   fermerModalEdit(); chargerPermanence();
 }
-
 function fermerModalEdit() { document.getElementById('editModal').classList.remove('active'); indexEnCours = null; }
 
 async function ajouter(){
@@ -803,13 +732,10 @@ async function ajouter(){
   if(!nom || (h === 0 && m === 0) || !montant) return;
 
   let texteForfait = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : "");
-
   await fetch('/api/clients', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ nom: nom, forfait: texteForfait, montant: montant, mac: mac })
   });
-
   document.getElementById('nom').value=''; document.getElementById('mac').value='';
   document.getElementById('ajoutHeures').value=''; document.getElementById('ajoutMinutes').value=''; document.getElementById('montant').value='';
   chargerPermanence();
@@ -832,36 +758,26 @@ async function activer(e, i){
 async function relancerOptionnel(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
   let c = clients[i]; let now = new Date(); let totalMin = 0;
-  
-  // On récupère uniquement la DERNIÈRE portion ajoutée ou le forfait de base pour relancer
-  let segments = c.forfait.split('+');
-  let dernierForfait = segments[segments.length - 1].trim();
+  let segments = c.forfait.split('+'); let dernierForfait = segments[segments.length - 1].trim();
   
   dernierForfait.split(' ').forEach((val, index, arr) => {
     let num = parseInt(val) || 0;
     if (val.includes('Heure')) totalMin += num * 60;
-    else if (val.includes('min')) {
-      // Cherche le nombre juste avant 'min' s'il est séparé
-      let numAvant = parseInt(arr[index-1]) || num;
-      totalMin += numAvant;
-    }
+    else if (val.includes('min')) { let numAvant = parseInt(arr[index-1]) || num; totalMin += numAvant; }
   });
-
-  if(totalMin === 0) totalMin = 60; // Valeur de secours
-
+  if(totalMin === 0) totalMin = 60;
   now.setMinutes(now.getMinutes() + totalMin);
   await fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'actif', expire: now.toISOString(), alerte: false }) });
   chargerPermanence();
 }
 
-function abrirModalConfirm(e, i) {
+function ouvrirModalConfirm(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
   indexSuppressionEnCours = i; 
   document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; 
   document.getElementById('btnConfirmOk').onclick = validerSuppression; 
   document.getElementById('confirmModal').classList.add('active'); 
 }
-
 async function validerSuppression() {
   if (indexSuppressionEnCours !== null) {
     await fetch(`/api/clients/${clients[indexSuppressionEnCours].id}`, { method: 'DELETE' });
@@ -880,12 +796,16 @@ async function verifier(){
       sonnerAlerte(c.nom,c.forfait);
     }
   }
-  if(recalculerTout) { chargerPermanence(); } 
-  else {
+  if(recalculerTout) { 
+    chargerPermanence(); 
+  } else {
+    // 1. Rafraîchit les chronos dans la table principale
     document.querySelectorAll('.cell-countdown').forEach(td => {
       let statut = td.getAttribute('data-statut'); let expire = td.getAttribute('data-expire');
       if (statut === 'actif' && expire) td.innerHTML = getCountdown(expire);
     });
+    // 2. Rafraîchit les chronos à la seconde près dans les fenêtres de survol (Popups) !
+    mettreAJourPopupsChrono();
   }
 }
 
@@ -894,94 +814,3 @@ window.onload = chargerPermanence;
 </script>
 </body>
 </html>
-"""
-
-# --- ROUTES FLASK ---
-@app.route('/')
-@login_required
-def index():
-    return render_template_string(HTML_CONTENT)
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    if request.method == 'POST':
-        u = User.query.filter_by(username=request.form.get('username')).first()
-        if u and check_password_hash(u.password, request.form.get('password')):
-            login_user(u)
-            return redirect(url_for('index'))
-        flash("Identifiants incorrects.")
-    return render_template_string(AUTH_HTML, title="Connexion", btn_text="Se connecter", action="login")
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        if User.query.filter_by(username=username).first():
-            flash("Ce nom d'utilisateur existe déjà.")
-        else:
-            new_user = User(username=username, password=generate_password_hash(password))
-            db.session.add(new_user)
-            db.session.commit()
-            flash("Compte créé avec succès ! Connectez-vous.")
-            return redirect(url_for('login'))
-    return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer un compte", action="register")
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('login'))
-
-# --- API REST JSON ---
-@app.route('/api/clients', methods=['GET'])
-@login_required
-def get_clients():
-    cls = Client.query.order_by(Client.id.desc()).all()
-    return jsonify([c.to_dict() for c in cls])
-
-@app.route('/api/clients', methods=['POST'])
-@login_required
-def add_client():
-    data = request.json
-    c = Client(
-        nom=data.get('nom'),
-        forfait=data.get('forfait'),
-        montant=data.get('montant'),
-        mac=data.get('mac', '')
-    )
-    db.session.add(c)
-    db.session.commit()
-    return jsonify(c.to_dict()), 201
-
-@app.route('/api/clients/<int:id>', methods=['PUT'])
-@login_required
-def update_client(id):
-    c = db.session.get(Client, id)
-    if not c:
-        return jsonify({"error": "Client introuvable"}), 404
-    data = request.json
-    if 'nom' in data: c.nom = data['nom']
-    if 'forfait' in data: c.forfait = data['forfait']
-    if 'montant' in data: c.montant = data['montant']
-    if 'mac' in data: c.mac = data['mac']
-    if 'statut' in data: c.statut = data['statut']
-    if 'expire' in data: c.expire = data['expire']
-    if 'alerte' in data: c.alerte = data['alerte']
-    db.session.commit()
-    return jsonify(c.to_dict())
-
-@app.route('/api/clients/<int:id>', methods=['DELETE'])
-@login_required
-def delete_client(id):
-    c = db.session.get(Client, id)
-    if not c:
-        return jsonify({"error": "Client introuvable"}), 404
-    db.session.delete(c)
-    db.session.commit()
-    return jsonify({"success": True})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
