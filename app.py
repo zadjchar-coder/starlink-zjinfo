@@ -103,7 +103,6 @@ button:hover{background:#1D4ED8}
   <div class="logo">📡</div>
   <h2>{{ title }}</h2>
   <p class="subtitle">Gestion WiFi Starlink ZJinfo</p>
-  
   {% with messages = get_flashed_messages() %}
     {% if messages %}
       {% for message in messages %}
@@ -111,17 +110,13 @@ button:hover{background:#1D4ED8}
       {% endfor %}
     {% endif %}
   {% endwith %}
-
   <form method="POST">
     <label>Nom d'utilisateur</label>
     <input name="username" placeholder="Ex: admin" required autocomplete="off">
-    
     <label>Mot de passe</label>
     <input type="password" name="password" placeholder="••••••••" required>
-    
     <button type="submit">{{ btn_text }}</button>
   </form>
-
   <div class="footer-link">
     {% if action == 'login' %}
       Pas encore de compte ? <a href="{{ url_for('register') }}">S'inscrire</a>
@@ -168,14 +163,29 @@ button:active{transform:scale(0.98)}
 .btn-green:hover{background:#059669}
 .btn-red{background:#EF4444}
 .btn-red:hover{background:#DC2626}
+
+/* RE-CONCEPTION DES CARTES STATS AVEC POSITION RELATIVE POUR LES POPUPS */
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
-.stat-card{background:#111827;border:1px solid #1F2937;border-radius:16px;padding:16px;transition:0.2s;cursor:pointer}
+.stat-card{background:#111827;border:1px solid #1F2937;border-radius:16px;padding:16px;transition:0.2s;cursor:pointer;position:relative}
 .stat-card:hover{border-color:#3B82F6;background:#1F2937}
 .stat-card.active-filter{border-color:#2563EB;background:#1C2541}
 .stat-label{color:#9CA3AF;font-size:13px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px}
 .stat-value{font-size:26px;font-weight:700}
 .caisse-detail {font-size: 11px; color: #9CA3AF; margin-top: 6px; border-top: 1px solid #1F2937; padding-top: 6px; text-align: left; line-height: 1.5;}
 .caisse-detail span {color: #E5E7EB; font-weight: 600;}
+
+/* STYLE DU NOUVEAU POPUP FLOTTANT AU SURVOL */
+.popup-hover {
+  position: absolute; top: 105%; left: 50%; transform: translateX(-50%);
+  background: #1F2937; border: 1px solid #374151; padding: 12px; min-width: 180px;
+  max-width: 240px; border-radius: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.6);
+  z-index: 99; display: none; max-height: 180px; overflow-y: auto; text-align: left;
+}
+.popup-hover h4 { font-size: 11px; color: #3B82F6; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #374151; padding-bottom: 4px; }
+.popup-item { font-size: 13px; padding: 3px 0; border-bottom: 1px dashed #2D3748; color: #E5E7EB; }
+.popup-item:last-child { border-bottom: none; }
+.stat-card:hover .popup-hover { display: block; }
+
 .list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
 .list-title{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600}
 .search{background:#1F2937;border:1px solid #374151;border-radius:10px;padding:10px 14px;color:#fff;width:160px;font-size:14px}
@@ -188,7 +198,7 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 .badge-attente{background:#FEF3C7;color:#92400E}
 .badge-actif{background:#D1FAE5;color:#065F46}
 .badge-expire{background:#FEE2E2;color:#991B1B}
-.btn-sm{padding:7px 12px;font-size:11px;width:auto;margin:2px;border-radius:6px;font-weight:600}
+.btn-sm{padding:7px 12px;font-size:11px;width:auto;margin:2px;border-radius:6px;font-weight:600;cursor:pointer;border:none;color:#fff}
 .empty{padding:60px;text-align:center;color:#6B7280;font-size:14px}
 .countdown{font-weight:700;font-family:'Courier New',monospace;font-size:14px}
 .countdown.normal{color:#10B981}
@@ -199,7 +209,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 .time-input-container {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
 .edit-time-grid {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
 
-/* STYLES POUR LA VUE BÉNÉFICES */
 .benefice-table th { background: #1F2937; color: #3B82F6; font-size: 13px; padding: 16px 12px; }
 .benefice-table td { font-size: 15px; padding: 16px 12px; font-weight: 500; }
 .valeur-gain { color: #10B981; font-weight: 700; font-family: 'Courier New', monospace; }
@@ -238,15 +247,30 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 
 <div class="container">
   <div class="stats">
-    <div class="stat-card" id="card-all" onmouseenter="filtrerParStatut('tous')"><div class="stat-label">Total Clients</div><div class="stat-value" id="total">0</div></div>
-    <div class="stat-card" id="card-attente" onmouseenter="filtrerParStatut('attente')"><div class="stat-label">En Attente</div><div class="stat-value" style="color:#F59E0B" id="attente">0</div></div>
-    <div class="stat-card" id="card-actif" onmouseenter="filtrerParStatut('actif')"><div class="stat-label">Actifs</div><div class="stat-value" style="color:#10B981" id="actifs">0</div></div>
-    <div class="stat-card" id="card-expiré" onmouseenter="filtrerParStatut('expiré')"><div class="stat-label">Expirés</div><div class="stat-value" style="color:#EF4444" id="expires">0</div></div>
+    <div class="stat-card" id="card-all" onclick="filtrerParStatut('tous')">
+      <div class="stat-label">Total Clients</div>
+      <div class="stat-value" id="total">0</div>
+      <div class="popup-hover"><h4>📋 Tous les clients</h4><div id="pop-all">Aucun</div></div>
+    </div>
+    <div class="stat-card" id="card-attente" onclick="filtrerParStatut('attente')">
+      <div class="stat-label">En Attente</div>
+      <div class="stat-value" style="color:#F59E0B" id="attente">0</div>
+      <div class="popup-hover"><h4>⏳ En attente</h4><div id="pop-attente">Aucun</div></div>
+    </div>
+    <div class="stat-card" id="card-actif" onclick="filtrerParStatut('actif')">
+      <div class="stat-label">Actifs</div>
+      <div class="stat-value" style="color:#10B981" id="actifs">0</div>
+      <div class="popup-hover"><h4>🟢 Clients actifs</h4><div id="pop-actifs">Aucun</div></div>
+    </div>
+    <div class="stat-card" id="card-expiré" onclick="filtrerParStatut('expiré')">
+      <div class="stat-label">Expirés</div>
+      <div class="stat-value" style="color:#EF4444" id="expires">0</div>
+      <div class="popup-hover"><h4>🔴 Forfaits expirés</h4><div id="pop-expires">Aucun</div></div>
+    </div>
     <div class="stat-card" id="card-caisse" onclick="basculerVue('benefices')">
       <div class="stat-label">💲 Encaissé Total</div>
       <div class="stat-value" style="color:#3B82F6" id="caisse">0 Ar</div>
       <div class="caisse-detail">
-        Jour : <span id="caisse-jour">0 Ar</span><br>
         Mois : <span id="caisse-mois">0 Ar</span><br>
         An : <span id="caisse-an">0 Ar</span>
       </div>
@@ -310,7 +334,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
         <div class="list-title" style="font-size: 22px; color: #10B981;">📊 Tableau de bord des Bénéfices</div>
         <button class="btn-sm btn-secondary" onclick="basculerVue('clients')" style="padding: 10px 18px; font-size: 14px;">⬅️ Retour aux clients</button>
       </div>
-
       <div style="overflow-x:auto;">
         <table class="benefice-table">
           <thead>
@@ -321,32 +344,15 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>📅 Aujourd'hui</td>
-              <td class="valeur-gain" id="gain-jour">0 Ar</td>
-              <td id="count-jour" style="color: #9CA3AF;">0 txn</td>
-            </tr>
-            <tr>
-              <td>🗓️ Cette Semaine (7 jours)</td>
-              <td class="valeur-gain" id="gain-semaine" style="color: #3B82F6;">0 Ar</td>
-              <td id="count-semaine" style="color: #9CA3AF;">0 txn</td>
-            </tr>
-            <tr>
-              <td>🌙 Ce Mois-ci</td>
-              <td class="valeur-gain" id="gain-mois" style="color: #F59E0B;">0 Ar</td>
-              <td id="count-mois" style="color: #9CA3AF;">0 txn</td>
-            </tr>
-            <tr>
-              <td>🚀 Cette Année</td>
-              <td class="valeur-gain" id="gain-an" style="color: #A855F7;">0 Ar</td>
-              <td id="count-an" style="color: #9CA3AF;">0 txn</td>
-            </tr>
+            <tr><td>📅 Aujourd'hui</td><td class="valeur-gain" id="gain-jour">0 Ar</td><td id="count-jour" style="color: #9CA3AF;">0 txn</td></tr>
+            <tr><td>🗓️ Cette Semaine (7 jours)</td><td class="valeur-gain" id="gain-semaine" style="color: #3B82F6;">0 Ar</td><td id="count-semaine" style="color: #9CA3AF;">0 txn</td></tr>
+            <tr><td>🌙 Ce Mois-ci</td><td class="valeur-gain" id="gain-mois" style="color: #F59E0B;">0 Ar</td><td id="count-mois" style="color: #9CA3AF;">0 txn</td></tr>
+            <tr><td>🚀 Cette Année</td><td class="valeur-gain" id="gain-an" style="color: #A855F7;">0 Ar</td><td id="count-an" style="color: #9CA3AF;">0 txn</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
-
 </div>
 
 <div class="modal-overlay" id="editModal">
@@ -460,6 +466,7 @@ function getCountdown(expire){
   return `<span class="${className}">${m}:${s.toString().padStart(2,'0')}</span>`;
 }
 
+// LE CLIC FILTRE LA TABLE, LE SURVOL N'AFFICHE QUE LE POPUP SANS TOUCHER LA TABLE PRINCIPALE
 function filtrerParStatut(statut) {
   statutFiltreActuel = statut;
   if (document.getElementById('vue-clients').style.display === 'none') return;
@@ -479,7 +486,9 @@ function filtrerParStatut(statut) {
 }
 
 function afficher(filtreTexte=''){
-  let html = ''; let liste = clients;
+  let html = ''; 
+  let liste = clients;
+  
   if (statutFiltreActuel !== 'tous') liste = liste.filter(c => c.statut === statutFiltreActuel);
   if (filtreTexte) liste = liste.filter(c => c.nom.toLowerCase().includes(filtreTexte.toLowerCase()));
 
@@ -489,6 +498,7 @@ function afficher(filtreTexte=''){
     liste.forEach((c)=>{
       let idx = clients.indexOf(c);
       let badge = c.statut==='actif'?'badge-actif':c.statut==='attente'?'badge-attente':'badge-expire';
+      
       let actions = c.statut==='attente' 
         ? `<button class="btn-sm btn-green" onclick="event.stopPropagation(); activer(${idx})">Activer</button>`
         : `<button class="btn-sm btn-green" onclick="event.stopPropagation(); relancerOptionnel(${idx})">Relancer</button>`;
@@ -510,12 +520,15 @@ function afficher(filtreTexte=''){
 
   document.getElementById('tbody').innerHTML = html;
   
+  // LOGIQUE DE CALCULS ET CONSTITUTION DES LISTES POPUPS
   let maintenant = new Date();
   let totalOrigine = 0;
   let totalJour = 0, txJour = 0;
   let totalSemaine = 0, txSemaine = 0;
   let totalMois = 0, txMois = 0;
   let totalAn = 0, txAn = 0;
+
+  let listeAll = [], listeAttente = [], listeActif = [], listeExpire = [];
 
   let uneSemaineAgo = new Date();
   uneSemaineAgo.setDate(maintenant.getDate() - 7);
@@ -524,8 +537,15 @@ function afficher(filtreTexte=''){
   clients.forEach(c => {
     if (!c.date) return;
     let dateClient = new Date(c.date);
-    let montant = intValeur = parseInt(c.montant) || 0;
-    totalOrigine += intValeur;
+    let montant = parseInt(c.montant) || 0;
+    totalOrigine += montant;
+
+    // Remplissage des listes pour Popups
+    let itemHtml = `<div class="popup-item">👤 ${c.nom} <span style="font-size:11px;color:#9CA3AF">(${c.forfait})</span></div>`;
+    listeAll.push(itemHtml);
+    if(c.statut === 'attente') listeAttente.push(itemHtml);
+    if(c.statut === 'actif') listeActif.push(itemHtml);
+    if(c.statut === 'expiré') listeExpire.push(itemHtml);
 
     if (dateClient.getFullYear() === maintenant.getFullYear()) {
       totalAn += montant; txAn++;
@@ -541,25 +561,29 @@ function afficher(filtreTexte=''){
     }
   });
 
+  // Injection des données dans les fenêtres flottantes (popups)
+  document.getElementById('pop-all').innerHTML = listeAll.join('') || 'Aucun client';
+  document.getElementById('pop-attente').innerHTML = listeAttente.join('') || 'Aucun client';
+  document.getElementById('pop-actifs').innerHTML = listeActif.join('') || 'Aucun client actif';
+  document.getElementById('pop-expires').innerHTML = listeExpire.join('') || 'Aucun forfait expiré';
+
+  // Mise à jour des compteurs card
   document.getElementById('total').textContent = clients.length;
   document.getElementById('attente').textContent = clients.filter(c=>c.statut==='attente').length;
   document.getElementById('actifs').textContent = clients.filter(c=>c.statut==='actif').length;
   document.getElementById('expires').textContent = clients.filter(c=>c.statut==='expiré').length;
   document.getElementById('caisse').textContent = totalOrigine.toLocaleString('fr-FR')+' Ar';
 
-  document.getElementById('caisse-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('caisse-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('caisse-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
 
+  // Vue bénéfices complète
   document.getElementById('gain-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-jour').textContent = txJour + ' txn';
-
   document.getElementById('gain-semaine').textContent = totalSemaine.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-semaine').textContent = txSemaine + ' txn';
-
   document.getElementById('gain-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-mois').textContent = txMois + ' txn';
-
   document.getElementById('gain-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-an').textContent = txAn + ' txn';
 
@@ -666,7 +690,7 @@ async function relancerOptionnel(i) {
   chargerPermanence();
 }
 
-function abrirModalConfirm(i) { indexSuppressionEnCours = i; document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; document.getElementById('btnConfirmOk').onclick = validerSuppression; document.getElementById('confirmModal').classList.add('active'); }
+function ouvrirModalConfirm(i) { indexSuppressionEnCours = i; document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; document.getElementById('btnConfirmOk').onclick = validerSuppression; document.getElementById('confirmModal').classList.add('active'); }
 
 async function validerSuppression() {
   if (indexSuppressionEnCours !== null) {
