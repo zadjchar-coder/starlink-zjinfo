@@ -68,6 +68,58 @@ def initialize_database_if_needed():
             db.session.commit()
         _db_initialized = True
 
+# --- API ENDPOINTS ---
+
+@app.route('/api/clients', methods=['GET'])
+@login_required
+def get_clients():
+    clients = Client.query.order_by(Client.id.desc()).all()
+    return jsonify([c.to_dict() for c in clients])
+
+@app.route('/api/clients', methods=['POST'])
+@login_required
+def add_client():
+    data = request.json
+    nouveau = Client(
+        nom=data['nom'],
+        forfait=data['forfait'],
+        montant=data['montant'],
+        mac=data.get('mac', ''),
+        statut='attente'
+    )
+    db.session.add(nouveau)
+    db.session.commit()
+    return jsonify(nouveau.to_dict())
+
+@app.route('/api/clients/<int:id>', methods=['PUT'])
+@login_required
+def update_client(id):
+    client = db.session.get(Client, id)
+    if not client:
+        return jsonify({"error": "Non trouvé"}), 404
+    data = request.json
+    if 'nom' in data: client.nom = data['nom']
+    if 'forfait' in data: client.forfait = data['forfait']
+    if 'montant' in data: client.montant = data['montant']
+    if 'mac' in data: client.mac = data['mac']
+    if 'statut' in data: client.statut = data['statut']
+    if 'expire' in data: client.expire = data['expire']
+    if 'alerte' in data: client.alerte = data['alerte']
+    db.session.commit()
+    return jsonify(client.to_dict())
+
+@app.route('/api/clients/<int:id>', methods=['DELETE'])
+@login_required
+def delete_client(id):
+    client = db.session.get(Client, id)
+    if not client:
+        return jsonify({"error": "Non trouvé"}), 404
+    db.session.delete(client)
+    db.session.commit()
+    return jsonify({"success": True})
+
+# --- INTERFACES HTML ---
+
 AUTH_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -157,6 +209,15 @@ button:active{transform:scale(0.98)}
 .btn-green:hover{background:#059669}
 .btn-red{background:#EF4444}
 .btn-red:hover{background:#DC2626}
+
+.select-action {
+  background: #1F2937; color: #10B981; border: 1px solid #374151;
+  padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  cursor: pointer; outline: none; transition: all 0.2s; width: 130px;
+}
+.select-action:hover { border-color: #10B981; background: #1C2541; }
+.select-action option { background: #111827; color: #fff; }
+
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
 .stat-card{background:#111827;border:1px solid #1F2937;border-radius:16px;padding:16px;transition:0.2s;cursor:pointer;position:relative}
 .stat-card:hover{border-color:#3B82F6;background:#1F2937}
@@ -166,11 +227,11 @@ button:active{transform:scale(0.98)}
 .caisse-detail {font-size: 11px; color: #9CA3AF; margin-top: 6px; border-top: 1px solid #1F2937; padding-top: 6px; text-align: left; line-height: 1.5;}
 .caisse-detail span {color: #E5E7EB; font-weight: 600;}
 
-/* Style optimisé pour la bulle popup de survol */
+/* Popups de survol */
 .popup-hover {
   position: absolute; top: 105%; left: 50%; transform: translateX(-50%);
-  background: #1F2937; border: 1px solid #374151; padding: 12px; min-width: 220px;
-  max-width: 280px; border-radius: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.6);
+  background: #1F2937; border: 1px solid #374151; padding: 12px; min-width: 230px;
+  max-width: 290px; border-radius: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.6);
   z-index: 99; display: none; max-height: 220px; overflow-y: auto; text-align: left;
 }
 .popup-hover h4 { font-size: 11px; color: #3B82F6; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #374151; padding-bottom: 4px; }
@@ -219,14 +280,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 .hint-longpress { text-align: center; color: #6B7280; font-size: 11px; margin-top: 4px; }
 .alert-title { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .alert-text { font-size: 14px; color: #E5E7EB; text-align: center; margin-bottom: 20px; line-height: 1.5; }
-
-.select-action {
-  background: #1F2937; color: #10B981; border: 1px solid #374151;
-  padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
-  cursor: pointer; outline: none; transition: all 0.2s; width: 125px;
-}
-.select-action:hover { border-color: #10B981; background: #1C2541; }
-.select-action option { background: #111827; color: #fff; }
 </style>
 </head>
 <body>
@@ -305,7 +358,7 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
         <div class="list-title" id="titre-liste-clients">📋 Liste des clients</div>
         <input class="search" placeholder="Rechercher..." id="search" oninput="filtrer()">
       </div>
-      <p class="hint-longpress">💡 Appuyez longuement sur une ligne pour modifier les détails du client</p>
+      <p class="hint-longpress">💡 Appuyez longuement sur une ligne pour modifier à tout moment</p>
       <div style="overflow-x:auto; margin-top:8px">
       <table>
         <thead>
@@ -354,7 +407,7 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 
 <div class="modal-overlay" id="editModal">
   <div class="modal-box">
-    <div class="list-title" id="editModalTitre" style="color:#3B82F6">📝 Modifier la fiche</div>
+    <div class="list-title" id="editModalTitre" style="color:#3B82F6">📝 Modifier / Configurer Fiche</div>
     <label>Nom du client</label>
     <input id="editNom">
     <label>Ajuster la durée</label>
@@ -375,24 +428,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
     <div class="btn-group">
       <button class="btn-green" onclick="validerEditionComplete()">Enregistrer</button>
       <button class="btn-secondary" onclick="fermerModalEdit()">Annuler</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="cumulModal">
-  <div class="modal-box">
-    <div class="list-title" style="color:#10B981">➕ Ajouter du Temps / Recharger</div>
-    <p style="font-size:13px; color:#9CA3AF; margin-bottom:12px;" id="cumulModalInfos"></p>
-    <label>Durée additionnelle</label>
-    <div class="edit-time-grid">
-      <div><span style="font-size:12px; color:#9CA3AF">Heure(s)</span><input id="cumulHeures" type="number" min="0" placeholder="0" oninput="calculerPrixCumul()"></div>
-      <div><span style="font-size:12px; color:#9CA3AF">Minute(s)</span><input id="cumulMinutes" type="number" min="0" max="59" placeholder="0" oninput="calculerPrixCumul()"></div>
-    </div>
-    <label>Montant à ajouter (Ar)</label>
-    <input id="cumulMontant" type="number" min="0" placeholder="Ex: 500">
-    <div class="btn-group">
-      <button class="btn-green" onclick="validerCumulTemps()">Cumuler</button>
-      <button class="btn-secondary" onclick="fermerModalCumul()">Annuler</button>
     </div>
   </div>
 </div>
@@ -458,13 +493,6 @@ function calculerPrixAutomatique() {
   document.getElementById('montant').value = (heures * 1000) + Math.round(minutes * (500 / 30));
 }
 
-function calculerPrixCumul() {
-  let hInput = document.getElementById('cumulHeures').value;
-  let mInput = document.getElementById('cumulMinutes').value;
-  let heures = parseInt(hInput) || 0; let minutes = parseInt(mInput) || 0;
-  document.getElementById('cumulMontant').value = (heures * 1000) + Math.round(minutes * (500 / 30));
-}
-
 function sonnerAlerte(nom, forfait){
   alerteAudio.currentTime = 0; alerteAudio.play().catch(e => {});
   if(navigator.vibrate) { navigator.vibrate([600, 250, 600]); }
@@ -507,15 +535,15 @@ function filtrerParStatut(statut) {
 
 function afficher(filtreTexte=''){
   let html = ''; 
-  let liste = clients;
+  let listes = clients;
   
-  if (statutFiltreActuel !== 'tous') liste = liste.filter(c => c.statut === statutFiltreActuel);
-  if (filtreTexte) liste = liste.filter(c => c.nom.toLowerCase().includes(filtreTexte.toLowerCase()));
+  if (statutFiltreActuel !== 'tous') listes = listes.filter(c => c.statut === statutFiltreActuel);
+  if (filtreTexte) listes = listes.filter(c => c.nom.toLowerCase().includes(filtreTexte.toLowerCase()));
 
-  if(liste.length === 0){
+  if(listes.length === 0){
     html = `<tr><td colspan="7" class="empty">Aucun client trouvé dans cette catégorie</td></tr>`;
   } else {
-    liste.forEach((c)=>{
+    listes.forEach((c)=>{
       let idx = clients.indexOf(c);
       let badge = c.statut==='actif'?'badge-actif':c.statut==='attente'?'badge-attente':'badge-expire';
       
@@ -527,7 +555,6 @@ function afficher(filtreTexte=''){
         dropdown += `<option value="" disabled selected style="color:#3B82F6;">⚙️ Actions...</option>`;
         dropdown += `<option value="relancer">🔄 Relancer</option>`;
       }
-      dropdown += `<option value="ajouter">➕ Ajouter Temps</option>`;
       dropdown += `<option value="modifier">📝 Modifier</option>`;
       dropdown += `<option value="supprimer" style="color:#EF4444; font-weight:bold;">🗑️ Supprimer</option>`;
       dropdown += `</select>`;
@@ -548,7 +575,6 @@ function afficher(filtreTexte=''){
 
   document.getElementById('tbody').innerHTML = html;
   
-  // Recalcul initial des chiffres globaux de la caisse
   let maintenant = new Date();
   let totalOrigine = 0, totalJour = 0, txJour = 0, totalSemaine = 0, txSemaine = 0, totalMois = 0, txMois = 0, totalAn = 0, txAn = 0;
   let uneSemaineAgo = new Date(); uneSemaineAgo.setDate(maintenant.getDate() - 7); uneSemaineAgo.setHours(0,0,0,0);
@@ -580,12 +606,21 @@ function afficher(filtreTexte=''){
   document.getElementById('gain-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-an').textContent = txAn + ' txn';
 
-  // Lancement de la mise à jour dynamique immédiate des popups
   mettreAJourPopupsChrono();
   attacherEvenementsAppuiLong();
 }
 
-// NOUVELLE FONCTION : Génère la liste des caractéristiques et calcul les chronos réels dans les popups
+function gererActionDropdown(event, selectElement, index) {
+  event.stopPropagation();
+  let action = selectElement.value;
+  if (!action) return;
+  if (action === "activer") activer(null, index);
+  else if (action === "relancer") relancerOptionnel(null, index);
+  else if (action === "modifier") ouvrirModalEditionComplete(index);
+  else if (action === "supprimer") ouvrirModalConfirm(null, index);
+  selectElement.value = "";
+}
+
 function mettreAJourPopupsChrono() {
   let popAll = [], popAttente = [], popActif = [], popExpire = [];
 
@@ -620,54 +655,6 @@ function mettreAJourPopupsChrono() {
   document.getElementById('expires').textContent = clients.filter(c=>c.statut==='expiré').length;
 }
 
-function gererActionDropdown(event, selectElement, index) {
-  event.stopPropagation();
-  let action = selectElement.value;
-  if (!action) return;
-  if (action === "activer") activer(null, index);
-  else if (action === "relancer") relancerOptionnel(null, index);
-  else if (action === "ajouter") ouvrirModalCumulTemps(index);
-  else if (action === "modifier") ouvrirModalEditionComplete(index);
-  else if (action === "supprimer") ouvrirModalConfirm(null, index);
-  selectElement.value = "";
-}
-
-function ouvrirModalCumulTemps(i) {
-  indexEnCours = parseInt(i); let c = clients[indexEnCours]; if(!c) return;
-  document.getElementById('cumulModalInfos').innerHTML = `Client: <strong>${c.nom}</strong><br>Forfait actuel: <span>${c.forfait}</span> | Solde: <span>${c.montant} Ar</span>`;
-  document.getElementById('cumulHeures').value = ''; document.getElementById('cumulMinutes').value = ''; document.getElementById('cumulMontant').value = '';
-  document.getElementById('cumulModal').classList.add('active');
-}
-function fermerModalCumul() { document.getElementById('cumulModal').classList.remove('active'); indexEnCours = null; }
-
-async function validerCumulTemps() {
-  if (indexEnCours === null) return; let c = clients[indexEnCours];
-  let hAdd = parseInt(document.getElementById('cumulHeures').value) || 0;
-  let mAdd = parseInt(document.getElementById('cumulMinutes').value) || 0;
-  let montantAdd = parseInt(document.getElementById('cumulMontant').value) || 0;
-  if ((hAdd === 0 && mAdd === 0) || montantAdd === 0) { fermerModalCumul(); return; }
-
-  let texteAdditionnel = (hAdd > 0 ? hAdd + " Heure" + (hAdd>1?"s":"") : "") + (mAdd > 0 ? (hAdd>0?" + ":"") + mAdd + " min" : "");
-  let nouveauForfait = c.forfait ? `${c.forfait} + ${texteAdditionnel}` : texteAdditionnel;
-  let nouveauMontant = (parseInt(c.montant) || 0) + montantAdd;
-  let nouvelleExpiration = c.expire; let nouveauStatut = c.statut;
-  
-  if (c.statut === 'actif' && c.expire) {
-    let baseDate = new Date(c.expire); if (baseDate < new Date()) { baseDate = new Date(); }
-    baseDate.setHours(baseDate.getHours() + hAdd); baseDate.setMinutes(baseDate.getMinutes() + mAdd);
-    nouvelleExpiration = baseDate.toISOString();
-  } else if (c.statut === 'expiré') {
-    let baseDate = new Date(); baseDate.setHours(baseDate.getHours() + hAdd); baseDate.setMinutes(baseDate.getMinutes() + mAdd);
-    nouvelleExpiration = baseDate.toISOString(); nouveauStatut = 'actif';
-  }
-
-  await fetch(`/api/clients/${c.id}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ forfait: nouveauForfait, montant: nouveauMontant, statut: nouveauStatut, expire: nouvelleExpiration, alerte: false })
-  });
-  fermerModalCumul(); chargerPermanence();
-}
-
 let timerAppuiLong;
 function attacherEvenementsAppuiLong() {
   document.querySelectorAll('.client-row-element').forEach(row => {
@@ -686,8 +673,6 @@ function attacherEvenementsAppuiLong() {
     row.addEventListener('mouseleave', endPress);
   });
 }
-
-function abrirModalConfirm(e, i) { ouvrirModalConfirm(e, i); }
 
 function ouvrirModalEditionComplete(i) {
   indexEnCours = parseInt(i); let c = clients[indexEnCours]; if(!c) return;
@@ -799,18 +784,61 @@ async function verifier(){
   if(recalculerTout) { 
     chargerPermanence(); 
   } else {
-    // 1. Rafraîchit les chronos dans la table principale
     document.querySelectorAll('.cell-countdown').forEach(td => {
       let statut = td.getAttribute('data-statut'); let expire = td.getAttribute('data-expire');
       if (statut === 'actif' && expire) td.innerHTML = getCountdown(expire);
     });
-    // 2. Rafraîchit les chronos à la seconde près dans les fenêtres de survol (Popups) !
     mettreAJourPopupsChrono();
   }
 }
 
-setInterval(verifier,1000);
-window.onload = chargerPermanence;
+// LANCEMENT DE LA BOUCLE DE MISE À JOUR ET CHARGEMENT INITIAL
+chargerPermanence();
+setInterval(verifier, 1000);
 </script>
 </body>
 </html>
+"""
+
+# --- ROUTES DES VUES PRINCIPALES ---
+
+@app.route('/')
+@login_required
+def index():
+    return render_template_string(HTML_CONTENT)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        user = User.query.filter_by(username=request.form.get('username')).first()
+        if user and check_password_hash(user.password, request.form.get('password')):
+            login_user(user)
+            return redirect(url_for('index'))
+        flash("Identifiants incorrects.")
+    return render_template_string(AUTH_HTML, title="Connexion", btn_text="Se connecter", action="login")
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if User.query.filter_by(username=username).first():
+            flash("Ce nom d'utilisateur existe déjà.")
+        else:
+            nouveau = User(username=username, password=generate_password_hash(password))
+            db.session.add(nouveau)
+            db.session.commit()
+            flash("Inscription réussie !")
+            return redirect(url_for('login'))
+    return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer le compte", action="register")
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+if __name__ == '__main__':
+    app.run(debug=True)
