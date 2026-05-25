@@ -1,7 +1,7 @@
 import os
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_login import LoginManager, UserMixin, login_required, logout_user, current_user, login_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
@@ -187,7 +187,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 .badge-attente{background:#FEF3C7;color:#92400E}
 .badge-actif{background:#D1FAE5;color:#065F46}
 .badge-expire{background:#FEE2E2;color:#991B1B}
-.btn-sm{padding:7px 12px;font-size:11px;width:auto;margin:2px;border-radius:6px;font-weight:600;cursor:pointer;border:none;color:#fff}
 .empty{padding:60px;text-align:center;color:#6B7280;font-size:14px}
 .countdown{font-weight:700;font-family:'Courier New',monospace;font-size:14px}
 .countdown.normal{color:#10B981}
@@ -217,6 +216,29 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 .hint-longpress { text-align: center; color: #6B7280; font-size: 11px; margin-top: 4px; }
 .alert-title { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .alert-text { font-size: 14px; color: #E5E7EB; text-align: center; margin-bottom: 20px; line-height: 1.5; }
+
+/* CSS pour le sélecteur d'actions stylisé */
+.select-action {
+  background: #1F2937;
+  color: #10B981;
+  border: 1px solid #374151;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+  width: 125px;
+}
+.select-action:hover {
+  border-color: #10B981;
+  background: #1C2541;
+}
+.select-action option {
+  background: #111827;
+  color: #fff;
+}
 </style>
 </head>
 <body>
@@ -369,6 +391,27 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
   </div>
 </div>
 
+<div class="modal-overlay" id="cumulModal">
+  <div class="modal-box">
+    <div class="list-title" style="color:#10B981">➕ Ajouter du Temps / Recharger</div>
+    <p style="font-size:13px; color:#9CA3AF; margin-bottom:12px;" id="cumulModalInfos"></p>
+    
+    <label>Durée additionnelle</label>
+    <div class="edit-time-grid">
+      <div><span style="font-size:12px; color:#9CA3AF">Heure(s)</span><input id="cumulHeures" type="number" min="0" placeholder="0" oninput="calculerPrixCumul()"></div>
+      <div><span style="font-size:12px; color:#9CA3AF">Minute(s)</span><input id="cumulMinutes" type="number" min="0" max="59" placeholder="0" oninput="calculerPrixCumul()"></div>
+    </div>
+    
+    <label>Montant à ajouter (Ar)</label>
+    <input id="cumulMontant" type="number" min="0" placeholder="Ex: 500">
+    
+    <div class="btn-group">
+      <button class="btn-green" onclick="validerCumulTemps()">Cumuler</button>
+      <button class="btn-secondary" onclick="fermerModalCumul()">Annuler</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="confirmModal">
   <div class="modal-box" style="max-width: 350px;">
     <div class="alert-title" style="color:#EF4444">🗑️ Supprimer le client</div>
@@ -430,6 +473,13 @@ function calculerPrixAutomatique() {
   document.getElementById('montant').value = (heures * 1000) + Math.round(minutes * (500 / 30));
 }
 
+function calculerPrixCumul() {
+  let hInput = document.getElementById('cumulHeures').value;
+  let mInput = document.getElementById('cumulMinutes').value;
+  let heures = parseInt(hInput) || 0; let minutes = parseInt(mInput) || 0;
+  document.getElementById('cumulMontant').value = (heures * 1000) + Math.round(minutes * (500 / 30));
+}
+
 function sonnerAlerte(nom, forfait){
   alerteAudio.currentTime = 0; alerteAudio.play().catch(e => {});
   if(navigator.vibrate) { navigator.vibrate([600, 250, 600]); }
@@ -486,10 +536,19 @@ function afficher(filtreTexte=''){
       let idx = clients.indexOf(c);
       let badge = c.statut==='actif'?'badge-actif':c.statut==='attente'?'badge-attente':'badge-expire';
       
-      let actions = c.statut==='attente' 
-        ? `<button class="btn-sm btn-green" onclick="activer(event, ${idx})">Activer</button>`
-        : `<button class="btn-sm btn-green" onclick="relancerOptionnel(event, ${idx})">Relancer</button>`;
-      actions += `<button class="btn-sm btn-red" onclick="ouvrirModalConfirm(event, ${idx})">Suppr</button>`;
+      // CRÉATION DU BOUTON DE SÉLECTION (DROPDOWN) D'ACTIONS
+      let dropdown = `<select class="select-action" onchange="gererActionDropdown(event, this, ${idx})">`;
+      if (c.statut === 'attente') {
+        dropdown += `<option value="" disabled selected style="color:#10B981;">▶️ Activer...</option>`;
+        dropdown += `<option value="activer">⚡ Activer</option>`;
+      } else {
+        dropdown += `<option value="" disabled selected style="color:#3B82F6;">⚙️ Actions...</option>`;
+        dropdown += `<option value="relancer">🔄 Relancer</option>`;
+      }
+      dropdown += `<option value="ajouter">➕ Ajouter Temps</option>`;
+      dropdown += `<option value="modifier">📝 Modifier</option>`;
+      dropdown += `<option value="supprimer" style="color:#EF4444;">🗑️ Supprimer</option>`;
+      dropdown += `</select>`;
 
       let expireDisplay = c.statut==='actif'? getCountdown(c.expire) : formatDate(c.expire);
 
@@ -500,13 +559,14 @@ function afficher(filtreTexte=''){
         <td>${parseInt(c.montant).toLocaleString('fr-FR')} Ar</td>
         <td class="cell-countdown" data-expire="${c.expire||''}" data-statut="${c.statut}">${expireDisplay}</td>
         <td><span class="badge ${badge}">${c.statut}</span></td>
-        <td>${actions}</td>
+        <td>${dropdown}</td>
       </tr>`;
     });
   }
 
   document.getElementById('tbody').innerHTML = html;
   
+  // Recalcul des statistiques de caisse et popups
   let maintenant = new Date();
   let totalOrigine = 0;
   let totalJour = 0, txJour = 0;
@@ -572,13 +632,108 @@ function afficher(filtreTexte=''){
   attacherEvenementsAppuiLong();
 }
 
+// ROUTAGE DES SELECTIONS DU DROPDOWN
+function gererActionDropdown(event, selectElement, index) {
+  event.stopPropagation();
+  let action = selectElement.value;
+  if (!action) return;
+
+  if (action === "activer") {
+    activer(null, index);
+  } else if (action === "relancer") {
+    relancerOptionnel(null, index);
+  } else if (action === "ajouter") {
+    ouvrirModalCumulTemps(index);
+  } else if (action === "modifier") {
+    ouvrirModalEditionComplete(index);
+  } else if (action === "supprimer") {
+    ouvrirModalConfirm(null, index);
+  }
+  
+  // Remettre le sélecteur à son affichage par défaut après action
+  selectElement.value = "";
+}
+
+// LOGIQUE POUR CUMULER LE TEMPS SUR UN FORFAIT EXISTANT
+function ouvrirModalCumulTemps(i) {
+  indexEnCours = parseInt(i);
+  let c = clients[indexEnCours];
+  if(!c) return;
+  document.getElementById('cumulModalInfos').innerHTML = `Client: <strong>${c.nom}</strong><br>Forfait actuel: <span>${c.forfait}</span> | Solde: <span>${c.montant} Ar</span>`;
+  document.getElementById('cumulHeures').value = '';
+  document.getElementById('cumulMinutes').value = '';
+  document.getElementById('cumulMontant').value = '';
+  document.getElementById('cumulModal').classList.add('active');
+}
+
+function fermerModalCumul() {
+  document.getElementById('cumulModal').classList.remove('active');
+  indexEnCours = null;
+}
+
+async function validerCumulTemps() {
+  if (indexEnCours === null) return;
+  let c = clients[indexEnCours];
+  
+  let hAdd = parseInt(document.getElementById('cumulHeures').value) || 0;
+  let mAdd = parseInt(document.getElementById('cumulMinutes').value) || 0;
+  let montantAdd = parseInt(document.getElementById('cumulMontant').value) || 0;
+  
+  if ((hAdd === 0 && mAdd === 0) || montantAdd === 0) {
+    fermerModalCumul();
+    return;
+  }
+
+  // 1. Calcul du nouveau libellé de forfait cumulé
+  let texteAdditionnel = (hAdd > 0 ? hAdd + " Heure" + (hAdd>1?"s":"") : "") + (mAdd > 0 ? (hAdd>0?" + ":"") + mAdd + " min" : "");
+  let nouveauForfait = c.forfait ? `${c.forfait} + ${texteAdditionnel}` : texteAdditionnel;
+  let nouveauMontant = (parseInt(c.montant) || 0) + montantAdd;
+
+  // 2. Ajustement de la date d'expiration si le client est déjà en cours
+  let nouvelleExpiration = c.expire;
+  let nouveauStatut = c.statut;
+  
+  if (c.statut === 'actif' && c.expire) {
+    let baseDate = new Date(c.expire);
+    // Si déjà expiré au moment du clic, on repart de l'heure actuelle
+    if (baseDate < new Date()) { baseDate = new Date(); }
+    baseDate.setHours(baseDate.getHours() + hAdd);
+    baseDate.setMinutes(baseDate.getMinutes() + mAdd);
+    nouvelleExpiration = baseDate.toISOString();
+  } else if (c.statut === 'expiré') {
+    // Si expiré, ajouter du temps le repasse en 'actif' immédiatement
+    let baseDate = new Date();
+    baseDate.setHours(baseDate.getHours() + hAdd);
+    baseDate.setMinutes(baseDate.getMinutes() + mAdd);
+    nouvelleExpiration = baseDate.toISOString();
+    nouveauStatut = 'actif';
+  }
+
+  let payload = {
+    forfait: nouveauForfait,
+    montant: nouveauMontant,
+    statut: nouveauStatut,
+    expire: nouvelleExpiration,
+    alerte: false
+  };
+
+  await fetch(`/api/clients/${c.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  fermerModalCumul();
+  chargerPermanence();
+}
+
 let timerAppuiLong;
 function attacherEvenementsAppuiLong() {
   document.querySelectorAll('.client-row-element').forEach(row => {
     let index = row.getAttribute('data-index');
     
     let startPress = (e) => {
-      if(e.target.tagName.toLowerCase() === 'button') return;
+      if(e.target.tagName.toLowerCase() === 'select' || e.target.tagName.toLowerCase() === 'option') return;
       
       ignoreNextClick = false;
       clearTimeout(timerAppuiLong);
@@ -662,8 +817,6 @@ async function ajouter(){
 
 async function activer(e, i){
   if (e) { e.stopPropagation(); e.preventDefault(); }
-  if (ignoreNextClick) return;
-  
   let c = clients[i]; let now = new Date(); let totalMin = 0;
   if(c.forfait){
     c.forfait.split('+').forEach(seg => {
@@ -678,24 +831,31 @@ async function activer(e, i){
 
 async function relancerOptionnel(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
-  if (ignoreNextClick) return;
-  
   let c = clients[i]; let now = new Date(); let totalMin = 0;
-  if(c.forfait){
-    c.forfait.split('+').forEach(seg => {
-      let num = parseInt(seg.trim()) || 0;
-      if (seg.includes('Heure')) totalMin += num * 60; else if (seg.includes('min')) totalMin += num;
-    });
-  }
+  
+  // On récupère uniquement la DERNIÈRE portion ajoutée ou le forfait de base pour relancer
+  let segments = c.forfait.split('+');
+  let dernierForfait = segments[segments.length - 1].trim();
+  
+  dernierForfait.split(' ').forEach((val, index, arr) => {
+    let num = parseInt(val) || 0;
+    if (val.includes('Heure')) totalMin += num * 60;
+    else if (val.includes('min')) {
+      // Cherche le nombre juste avant 'min' s'il est séparé
+      let numAvant = parseInt(arr[index-1]) || num;
+      totalMin += numAvant;
+    }
+  });
+
+  if(totalMin === 0) totalMin = 60; // Valeur de secours
+
   now.setMinutes(now.getMinutes() + totalMin);
   await fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'actif', expire: now.toISOString(), alerte: false }) });
   chargerPermanence();
 }
 
-function ouvrirModalConfirm(e, i) {
+function abrirModalConfirm(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
-  if (ignoreNextClick) return;
-  
   indexSuppressionEnCours = i; 
   document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; 
   document.getElementById('btnConfirmOk').onclick = validerSuppression; 
