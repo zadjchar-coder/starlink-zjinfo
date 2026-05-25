@@ -327,7 +327,7 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
               <td id="count-jour" style="color: #9CA3AF;">0 txn</td>
             </tr>
             <tr>
-              <td>🗓️ Cette Semaine (7 derniers jours)</td>
+              <td>🗓️ Cette Semaine (7 jours)</td>
               <td class="valeur-gain" id="gain-semaine" style="color: #3B82F6;">0 Ar</td>
               <td id="count-semaine" style="color: #9CA3AF;">0 txn</td>
             </tr>
@@ -419,7 +419,6 @@ function basculerVue(vue) {
     document.getElementById('vue-clients').style.display = 'none';
     document.getElementById('vue-benefices').style.display = 'block';
     document.getElementById('card-caisse').classList.add('active-filter');
-    // Enlever la sélection des autres filtres
     document.querySelectorAll('.stat-card:not(#card-caisse)').forEach(c => c.classList.remove('active-filter'));
   } else {
     document.getElementById('vue-benefices').style.display = 'none';
@@ -463,10 +462,7 @@ function getCountdown(expire){
 
 function filtrerParStatut(statut) {
   statutFiltreActuel = statut;
-  if (document.getElementById('vue-clients').style.display === 'none') {
-    // Si on est dans les bénéfices, le survol ne doit pas tout casser visuellement
-    return;
-  }
+  if (document.getElementById('vue-clients').style.display === 'none') return;
   
   document.querySelectorAll('.stat-card').forEach(card => card.classList.remove('active-filter'));
   
@@ -483,14 +479,9 @@ function filtrerParStatut(statut) {
 }
 
 function afficher(filtreTexte=''){
-  let html = '';
-  let liste = clients;
-  if (statutFiltreActuel !== 'tous') {
-    liste = liste.filter(c => c.statut === statutFiltreActuel);
-  }
-  if (filtreTexte) {
-    liste = liste.filter(c => c.nom.toLowerCase().includes(filtreTexte.toLowerCase()));
-  }
+  let html = ''; let liste = clients;
+  if (statutFiltreActuel !== 'tous') liste = liste.filter(c => c.statut === statutFiltreActuel);
+  if (filtreTexte) liste = liste.filter(c => c.nom.toLowerCase().includes(filtreTexte.toLowerCase()));
 
   if(liste.length === 0){
     html = `<tr><td colspan="7" class="empty">Aucun client trouvé dans cette catégorie</td></tr>`;
@@ -519,14 +510,13 @@ function afficher(filtreTexte=''){
 
   document.getElementById('tbody').innerHTML = html;
   
-  // CALCULS COMPTEURS TEMPORELS & STATISTIQUES AVANCÉES
   let maintenant = new Date();
+  let totalOrigine = 0;
   let totalJour = 0, txJour = 0;
   let totalSemaine = 0, txSemaine = 0;
   let totalMois = 0, txMois = 0;
   let totalAn = 0, txAn = 0;
 
-  // Calcul d'il y a 7 jours à minuit
   let uneSemaineAgo = new Date();
   uneSemaineAgo.setDate(maintenant.getDate() - 7);
   uneSemaineAgo.setHours(0,0,0,0);
@@ -534,49 +524,44 @@ function afficher(filtreTexte=''){
   clients.forEach(c => {
     if (!c.date) return;
     let dateClient = new Date(c.date);
-    let montant = parseInt(c.montant) || 0;
+    let montant = intValeur = parseInt(c.montant) || 0;
+    totalOrigine += intValeur;
 
-    // Calcul Année
     if (dateClient.getFullYear() === maintenant.getFullYear()) {
       totalAn += montant; txAn++;
-      // Calcul Mois
       if (dateClient.getMonth() === maintenant.getMonth()) {
         totalMois += montant; txMois++;
-        // Calcul Jour
         if (dateClient.getDate() === maintenant.getDate()) {
           totalJour += montant; txJour++;
         }
       }
     }
-    // Calcul Semaine Glissante (7 derniers jours)
     if (dateClient >= uneSemaineAgo) {
       totalSemaine += montant; txSemaine++;
     }
   });
 
-  // Mettre à jour les widgets du haut
   document.getElementById('total').textContent = clients.length;
   document.getElementById('attente').textContent = clients.filter(c=>c.statut==='attente').length;
   document.getElementById('actifs').textContent = clients.filter(c=>c.statut==='actif').length;
   document.getElementById('expires').textContent = clients.filter(c=>c.statut==='expiré').length;
-  document.getElementById('caisse').textContent = clients.reduce((sum,c)=>sum+parseInt(c.montant||0),0).toLocaleString('fr-FR')+' Ar';
+  document.getElementById('caisse').textContent = totalOrigine.toLocaleString('fr-FR')+' Ar';
 
   document.getElementById('caisse-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('caisse-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('caisse-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
 
-  // Mettre à jour le tableau complet de la page des bénéfices
   document.getElementById('gain-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
-  document.getElementById('count-jour').textContent = txJour + ' transaction' + (txJour > 1 ? 's' : '');
+  document.getElementById('count-jour').textContent = txJour + ' txn';
 
   document.getElementById('gain-semaine').textContent = totalSemaine.toLocaleString('fr-FR') + ' Ar';
-  document.getElementById('count-semaine').textContent = txSemaine + ' transaction' + (txSemaine > 1 ? 's' : '');
+  document.getElementById('count-semaine').textContent = txSemaine + ' txn';
 
   document.getElementById('gain-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
-  document.getElementById('count-mois').textContent = txMois + ' transaction' + (txMois > 1 ? 's' : '');
+  document.getElementById('count-mois').textContent = txMois + ' txn';
 
   document.getElementById('gain-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
-  document.getElementById('count-an').textContent = txAn + ' transaction' + (txAn > 1 ? 's' : '');
+  document.getElementById('count-an').textContent = txAn + ' txn';
 
   attacherEvenementsAppuiLong();
 }
@@ -681,7 +666,7 @@ async function relancerOptionnel(i) {
   chargerPermanence();
 }
 
-function ouvrirModalConfirm(i) { indexSuppressionEnCours = i; document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; document.getElementById('btnConfirmOk').onclick = validerSuppression; document.getElementById('confirmModal').classList.add('active'); }
+function abrirModalConfirm(i) { indexSuppressionEnCours = i; document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; document.getElementById('btnConfirmOk').onclick = validerSuppression; document.getElementById('confirmModal').classList.add('active'); }
 
 async function validerSuppression() {
   if (indexSuppressionEnCours !== null) {
@@ -715,3 +700,90 @@ window.onload = chargerPermanence;
 </script>
 </body>
 </html>
+"""
+
+# --- ROUTES FLASK ---
+@app.route('/')
+@login_required
+def index():
+    return render_template_string(HTML_CONTENT)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        u = User.query.filter_by(username=request.form.get('username')).first()
+        if u and check_password_hash(u.password, request.form.get('password')):
+            login_user(u)
+            return redirect(url_for('index'))
+        flash("Identifiants incorrects.")
+    return render_template_string(AUTH_HTML, title="Connexion", btn_text="Se connecter", action="login")
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if User.query.filter_by(username=username).first():
+            flash("Ce nom d'utilisateur existe déjà.")
+        else:
+            new_user = User(username=username, password=generate_password_hash(password))
+            db.session.add(new_user)
+            db.session.commit()
+            flash("Compte créé avec succès ! Connectez-vous.")
+            return redirect(url_for('login'))
+    return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer un compte", action="register")
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# --- API REST JSON ---
+@app.route('/api/clients', methods=['GET'])
+@login_required
+def get_clients():
+    cls = Client.query.order_by(Client.id.desc()).all()
+    return jsonify([c.to_dict() for c in cls])
+
+@app.route('/api/clients', methods=['POST'])
+@login_required
+def add_client():
+    data = request.json
+    c = Client(
+        nom=data.get('nom'),
+        forfait=data.get('forfait'),
+        montant=data.get('montant'),
+        mac=data.get('mac', '')
+    )
+    db.session.add(c)
+    db.session.commit()
+    return jsonify(c.to_dict()), 210
+
+@app.route('/api/clients/<int:id>', methods=['PUT'])
+@login_required
+def update_client(id):
+    c = Client.query.get_or_400(id)
+    data = request.json
+    if 'nom' in data: c.nom = data['nom']
+    if 'forfait' in data: c.forfait = data['forfait']
+    if 'montant' in data: c.montant = data['montant']
+    if 'mac' in data: c.mac = data['mac']
+    if 'statut' in data: c.statut = data['statut']
+    if 'expire' in data: c.expire = data['expire']
+    if 'alerte' in data: c.alerte = data['alerte']
+    db.session.commit()
+    return jsonify(c.to_dict())
+
+@app.route('/api/clients/<int:id>', methods=['DELETE'])
+@login_required
+def delete_client(id):
+    c = Client.query.get_or_400(id)
+    db.session.delete(c)
+    db.session.commit()
+    return jsonify({"success": True})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
