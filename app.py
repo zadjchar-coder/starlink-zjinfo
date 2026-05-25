@@ -213,7 +213,7 @@ button:active{transform:scale(0.98)}
 .select-action {
   background: #1F2937; color: #10B981; border: 1px solid #374151;
   padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
-  cursor: pointer; outline: none; transition: all 0.2s; width: 130px;
+  cursor: pointer; outline: none; transition: all 0.2s; width: 140px;
 }
 .select-action:hover { border-color: #10B981; background: #1C2541; }
 .select-action option { background: #111827; color: #fff; }
@@ -407,26 +407,37 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 
 <div class="modal-overlay" id="editModal">
   <div class="modal-box">
-    <div class="list-title" id="editModalTitre" style="color:#3B82F6">📝 Modifier / Configurer Fiche</div>
-    <label>Nom du client</label>
-    <input id="editNom">
-    <label>Ajuster la durée</label>
-    <div class="edit-time-grid">
-      <div><span style="font-size:12px; color:#9CA3AF">Heure(s)</span><input id="editHeures" type="number" min="0"></div>
-      <div><span style="font-size:12px; color:#9CA3AF">Minute(s)</span><input id="editMinutes" type="number" min="0" max="59"></div>
+    <div class="list-title" id="editModalTitre" style="color:#3B82F6">⏳ Prolonger / Configurer Session</div>
+    
+    <div id="info-cumul" style="background:#1F2937; padding:10px; border-radius:10px; margin-top:12px; font-size:13px; border-left:4px solid #2563EB;">
+      Client : <strong id="lbl-edit-nom" style="color:#fff;">-</strong><br>
+      Cumul Actuel : <span id="lbl-edit-forfait" style="color:#3B82F6; font-weight:600;">-</span> (<span id="lbl-edit-montant" style="color:#10B981;">-</span>)
     </div>
-    <label>Montant Global (Ar)</label>
+
+    <label id="lbl-action-temps" style="color:#F59E0B; font-weight:600;">➕ Temps à RAJOUTER :</label>
+    <div class="edit-time-grid">
+      <div><span style="font-size:12px; color:#9CA3AF">Heure(s)</span><input id="editHeures" type="number" min="0" oninput="calculerPrixEditionAutomatique()"></div>
+      <div><span style="font-size:12px; color:#9CA3AF">Minute(s)</span><input id="editMinutes" type="number" min="0" max="59" oninput="calculerPrixEditionAutomatique()"></div>
+    </div>
+    
+    <label>Montant Global Réglé (Ar)</label>
     <input id="editMontant" type="number" min="0">
-    <label>Adresse MAC</label>
-    <input id="editMac">
-    <label>Statut</label>
-    <select id="editStatut">
-      <option value="attente">En attente</option>
-      <option value="actif">Actif</option>
-      <option value="expiré">Expiré</option>
-    </select>
+    
+    <div id="zone-avancee-edition">
+      <label>Nom du client</label>
+      <input id="editNom">
+      <label>Adresse MAC</label>
+      <input id="editMac">
+      <label>Statut global de la ligne</label>
+      <select id="editStatut">
+        <option value="attente">En attente</option>
+        <option value="actif">Actif</option>
+        <option value="expiré">Expiré</option>
+      </select>
+    </div>
+
     <div class="btn-group">
-      <button class="btn-green" onclick="validerEditionComplete()">Enregistrer</button>
+      <button class="btn-green" onclick="validerEditionComplete()">💾 Valider</button>
       <button class="btn-secondary" onclick="fermerModalEdit()">Annuler</button>
     </div>
   </div>
@@ -455,6 +466,7 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 let clients = [];
 let statutFiltreActuel = 'tous';
 let indexEnCours = null;
+let modeProlongationSeule = false; // Permet de basculer la popup en mode ajout direct ou édition complète
 let indexSuppressionEnCours = null;
 let ignoreNextClick = false; 
 let alerteAudio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3'); 
@@ -491,6 +503,21 @@ function calculerPrixAutomatique() {
   if(hInput === "" && mInput === "") { document.getElementById('montant').value = ""; return; }
   let heures = parseInt(hInput) || 0; let minutes = parseInt(mInput) || 0;
   document.getElementById('montant').value = (heures * 1000) + Math.round(minutes * (500 / 30));
+}
+
+function calculerPrixEditionAutomatique() {
+  if(!modeProlongationSeule) return; // Ne pas interférer en mode édition manuelle brute
+  let i = indexEnCours; if(i === null) return;
+  let c = clients[i];
+  
+  let hInput = document.getElementById('editHeures').value;
+  let mInput = document.getElementById('editMinutes').value;
+  
+  let heuresAjout = parseInt(hInput) || 0; 
+  let minutesAjout = parseInt(mInput) || 0;
+  
+  let surcout = (heuresAjout * 1000) + Math.round(minutesAjout * (500 / 30));
+  document.getElementById('editMontant').value = parseInt(c.montant) + surcout;
 }
 
 function sonnerAlerte(nom, forfait){
@@ -549,13 +576,14 @@ function afficher(filtreTexte=''){
       
       let dropdown = `<select class="select-action" onchange="gererActionDropdown(event, this, ${idx})">`;
       if (c.statut === 'attente') {
-        dropdown += `<option value="" disabled selected style="color:#10B981;">▶️ Activer...</option>`;
-        dropdown += `<option value="activer">⚡ Activer</option>`;
+        dropdown += `<option value="" disabled selected style="color:#10B981;">▶️ Actions...</option>`;
+        dropdown += `<option value="activer">⚡ Activer Forfait</option>`;
       } else {
         dropdown += `<option value="" disabled selected style="color:#3B82F6;">⚙️ Actions...</option>`;
-        dropdown += `<option value="relancer">🔄 Relancer</option>`;
+        dropdown += `<option value="relancer">🔄 Relancer Forfait</option>`;
+        dropdown += `<option value="prolonger">➕ Prolonger (Ajouter)</option>`;
       }
-      dropdown += `<option value="modifier">📝 Modifier</option>`;
+      dropdown += `<option value="modifier">📝 Modifier Fiche</option>`;
       dropdown += `<option value="supprimer" style="color:#EF4444; font-weight:bold;">🗑️ Supprimer</option>`;
       dropdown += `</select>`;
 
@@ -615,8 +643,9 @@ function gererActionDropdown(event, selectElement, index) {
   let action = selectElement.value;
   if (!action) return;
   if (action === "activer") activer(null, index);
-  else if (action === "relancer") relancerOptionnel(null, index);
-  else if (action === "modifier") ouvrirModalEditionComplete(index);
+  else if (action === "relancer") relancerChronoSeul(null, index);
+  else if (action === "prolonger") ouvrirModalProlonger(index);
+  else if (action === "modifier") ouvrirModalEditionComplete(index, false);
   else if (action === "supprimer") ouvrirModalConfirm(null, index);
   selectElement.value = "";
 }
@@ -662,7 +691,7 @@ function attacherEvenementsAppuiLong() {
     let startPress = (e) => {
       if(e.target.tagName.toLowerCase() === 'select' || e.target.tagName.toLowerCase() === 'option') return;
       ignoreNextClick = false; clearTimeout(timerAppuiLong);
-      timerAppuiLong = setTimeout(() => { ignoreNextClick = true; ouvrirModalEditionComplete(index); }, 700);
+      timerAppuiLong = setTimeout(() => { ignoreNextClick = true; ouvrirModalEditionComplete(index, false); }, 700);
     };
     let endPress = () => { clearTimeout(timerAppuiLong); };
     row.addEventListener('touchstart', startPress, { passive: true });
@@ -674,11 +703,38 @@ function attacherEvenementsAppuiLong() {
   });
 }
 
-function ouvrirModalEditionComplete(i) {
+// Fonction pour Ouvrir en Mode PROLONGATION (Cumul automatique du forfait et de l'argent)
+function ouvrirModalProlonger(i) {
+  ouvrirModalEditionComplete(i, true);
+}
+
+function ouvrirModalEditionComplete(i, pourProlonger = false) {
   indexEnCours = parseInt(i); let c = clients[indexEnCours]; if(!c) return;
-  document.getElementById('editNom').value = c.nom; document.getElementById('editMontant').value = c.montant;
-  document.getElementById('editMac').value = c.mac || ''; document.getElementById('editStatut').value = c.statut;
-  document.getElementById('editHeures').value = ''; document.getElementById('editMinutes').value = '';
+  modeProlongationSeule = pourProlonger;
+
+  document.getElementById('lbl-edit-nom').textContent = c.nom;
+  document.getElementById('lbl-edit-forfait').textContent = c.forfait;
+  document.getElementById('lbl-edit-montant').textContent = parseInt(c.montant).toLocaleString('fr-FR') + ' Ar';
+
+  document.getElementById('editNom').value = c.nom; 
+  document.getElementById('editMontant').value = c.montant;
+  document.getElementById('editMac').value = c.mac || ''; 
+  document.getElementById('editStatut').value = c.statut;
+  document.getElementById('editHeures').value = ''; 
+  document.getElementById('editMinutes').value = '';
+
+  if (pourProlonger) {
+    document.getElementById('editModalTitre').textContent = "➕ Prolonger le Temps Client";
+    document.getElementById('editModalTitre').style.color = "#10B981";
+    document.getElementById('lbl-action-temps').textContent = "➕ Temps à RAJOUTER à la session :";
+    document.getElementById('zone-avancee-edition').style.display = "none";
+  } else {
+    document.getElementById('editModalTitre').textContent = "📝 Modifier / Configurer Fiche";
+    document.getElementById('editModalTitre').style.color = "#3B82F6";
+    document.getElementById('lbl-action-temps').textContent = "⚠️ Écraser la durée par une nouvelle :";
+    document.getElementById('zone-avancee-edition').style.display = "block";
+  }
+
   document.getElementById('editModal').classList.add('active');
 }
 
@@ -686,18 +742,47 @@ async function validerEditionComplete() {
   if(indexEnCours === null) return; let c = clients[indexEnCours];
   let h = parseInt(document.getElementById('editHeures').value) || 0;
   let m = parseInt(document.getElementById('editMinutes').value) || 0;
+  
   let texteForfait = c.forfait;
-  if(h > 0 || m > 0) { texteForfait = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : ""); }
+  let nouveauStatut = modeProlongationSeule ? 'actif' : document.getElementById('editStatut').value;
+  let baseDate = new Date();
+
+  if (modeProlongationSeule) {
+    // 1. Calcul du cumul du texte de forfait
+    if (h > 0 || m > 0) {
+      let segmentAjout = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : "");
+      texteForfait = c.forfait + " + " + segmentAjout;
+    }
+    
+    // 2. Prolongation intelligente du Chrono restant
+    let minutesAjoutTotal = (h * 60) + m;
+    if (c.statut === 'actif' && c.expire) {
+      let expireActuelle = new Date(c.expire);
+      if (expireActuelle > baseDate) {
+        // Le client a encore du temps, on ajoute les minutes à la suite de sa fin théorique
+        baseDate = expireActuelle;
+      }
+    }
+    baseDate.setMinutes(baseDate.getMinutes() + minutesAjoutTotal);
+
+  } else {
+    // Mode édition classique (Brute)
+    if (h > 0 || m > 0) {
+      texteForfait = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : "");
+    }
+    baseDate.setHours(baseDate.getHours() + h); 
+    baseDate.setMinutes(baseDate.getMinutes() + m);
+  }
   
   let payload = {
     nom: document.getElementById('editNom').value.trim(),
     montant: parseInt(document.getElementById('editMontant').value) || 0,
     mac: document.getElementById('editMac').value.trim(),
-    statut: document.getElementById('editStatut').value,
+    statut: nouveauStatut,
     forfait: texteForfait
   };
+
   if (payload.statut === 'actif') {
-    let baseDate = new Date(); baseDate.setHours(baseDate.getHours() + h); baseDate.setMinutes(baseDate.getMinutes() + m);
     payload.expire = baseDate.toISOString(); payload.alerte = false;
   } else if (payload.statut === 'expiré') {
     payload.expire = new Date().toISOString(); payload.alerte = true;
@@ -740,23 +825,24 @@ async function activer(e, i){
   chargerPermanence();
 }
 
-async function relancerOptionnel(e, i) {
+// Relance simple du forfait affiché, SANS toucher à la caisse (Montant inchangé)
+async function relancerChronoSeul(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
   let c = clients[i]; let now = new Date(); let totalMin = 0;
-  let segments = c.forfait.split('+'); let dernierForfait = segments[segments.length - 1].trim();
   
-  dernierForfait.split(' ').forEach((val, index, arr) => {
-    let num = parseInt(val) || 0;
-    if (val.includes('Heure')) totalMin += num * 60;
-    else if (val.includes('min')) { let numAvant = parseInt(arr[index-1]) || num; totalMin += numAvant; }
-  });
+  if(c.forfait){
+    c.forfait.split('+').forEach(seg => {
+      let num = parseInt(seg.trim()) || 0;
+      if (seg.includes('Heure')) totalMin += num * 60; else if (seg.includes('min')) totalMin += num;
+    });
+  }
   if(totalMin === 0) totalMin = 60;
   now.setMinutes(now.getMinutes() + totalMin);
   await fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'actif', expire: now.toISOString(), alerte: false }) });
   chargerPermanence();
 }
 
-function ouvrirModalConfirm(e, i) {
+function abrirModalConfirm(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
   indexSuppressionEnCours = i; 
   document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; 
@@ -792,7 +878,6 @@ async function verifier(){
   }
 }
 
-// LANCEMENT DE LA BOUCLE DE MISE À JOUR ET CHARGEMENT INITIAL
 chargerPermanence();
 setInterval(verifier, 1000);
 </script>
