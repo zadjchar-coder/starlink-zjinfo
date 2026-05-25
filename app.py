@@ -8,8 +8,13 @@ from datetime import datetime
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'une_cle_secrete_tres_difficile_a_deviner_12345'
 
-# Configuration de la base de données SQLite sur Render
-db_path = os.path.join(os.path.dirname(__file__), 'starlink.db')
+# --- CORRECTION DE SÉCURITÉ POUR RENDER ---
+# Utilisation du dossier /tmp pour éviter l'effacement de la base de données au redémarrage
+if os.environ.get('RENDER'):
+    db_path = '/tmp/starlink.db'
+else:
+    db_path = os.path.join(os.path.dirname(__file__), 'starlink.db')
+
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
@@ -54,7 +59,7 @@ class Client(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --- DESIGN DES PAGES D'AUTHENTIFICATION ---
+# --- LE DESIGN D'AUTHENTIFICATION COMPLET ---
 AUTH_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -116,7 +121,7 @@ button:hover{background:#1D4ED8}
 </html>
 """
 
-# --- INTERFACE PRINCIPALE PROTECTION TABLEAU DE BORD ---
+# --- RESTE DU CODE (INTERFACE PRINCIPALE AVEC CLIC STATUT ET CAISSE TEMPORELLE) ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -255,7 +260,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
     <label>Adresse MAC (optionnel)</label>
     <input id="mac" placeholder="00:1A:2B:3C:4D:5E">
     <button onclick="ajouter()">+ Ajouter le client</button>
-    <div class="sync-status">☁️ Toutes vos données sont sécurisées en ligne</div>
   </div>
 
   <div class="card">
@@ -304,7 +308,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 <div class="modal-overlay" id="editModal">
   <div class="modal-box">
     <div class="list-title" id="editModalTitre" style="color:#3B82F6">📝 Modifier la fiche</div>
-    <div class="modal-info" id="editModalEtatActuel">Calcul...</div>
     <label>Nom du client</label>
     <input id="editNom">
     <label>Ajuster la durée</label>
@@ -344,9 +347,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
   <div class="modal-box" style="max-width: 380px; border-color: #EF4444;">
     <div class="alert-title" style="color:#EF4444; animation: blink 1s infinite;">⏰ TEMPS EXPIRÉ !</div>
     <div class="alert-text" id="alertModalText">Le forfait est terminé.</div>
-    <div class="modal-info" style="border-left-color: #EF4444; margin-bottom: 15px; text-align: center; color:#fff;">
-      ⚠️ Désactivez sa connexion sur l'antenne Starlink.
-    </div>
     <button class="btn-red" onclick="fermerModalAlert()">Arrêter le son</button>
   </div>
 </div>
@@ -430,7 +430,6 @@ function afficher(filtreTexte=''){
   if (statutFiltreActuel !== 'tous') {
     liste = liste.filter(c => c.statut === statutFiltreActuel);
   }
-  
   if (filtreTexte) {
     liste = liste.filter(c => c.nom.toLowerCase().includes(filtreTexte.toLowerCase()));
   }
@@ -462,7 +461,7 @@ function afficher(filtreTexte=''){
 
   document.getElementById('tbody').innerHTML = html;
   
-  // LOGIQUE CALCUL DE LA CAISSE PAR JOUR, MOIS, ANNEE
+  // CALCULS COMPTEURS TEMPORELS
   let maintenant = new Date();
   let totalJour = 0, totalMois = 0, totalAn = 0;
 
@@ -510,19 +509,8 @@ function attacherEvenementsAppuiLong() {
 
 function ouvrirModalEditionComplete(i) {
   indexEnCours = parseInt(i); let c = clients[indexEnCours]; if(!c) return;
-  document.getElementById('editModalTitre').textContent = `📝 Fiche de : ${c.nom}`;
   document.getElementById('editNom').value = c.nom; document.getElementById('editMontant').value = c.montant;
   document.getElementById('editMac').value = c.mac || ''; document.getElementById('editStatut').value = c.statut;
-  
-  let totalMinutes = 0;
-  if(c.forfait) {
-    c.forfait.split('+').forEach(seg => {
-      let num = parseInt(seg.trim()) || 0;
-      if (seg.includes('Heure')) totalMinutes += num * 60; else if (seg.includes('min')) totalMinutes += num;
-    });
-  }
-  let h = Math.floor(totalMinutes / 60); let m = totalMinutes % 60;
-  document.getElementById('editHeures').value = h > 0 ? h : ''; document.getElementById('editMinutes').value = m > 0 ? m : '';
   document.getElementById('editModal').classList.add('active');
 }
 
@@ -531,8 +519,10 @@ async function validerEditionComplete() {
   let h = parseInt(document.getElementById('editHeures').value) || 0;
   let m = parseInt(document.getElementById('editMinutes').value) || 0;
   
-  let texteForfait = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : "");
-  if (h === 0 && m === 0) texteForfait = "Sans forfait";
+  let texteForfait = c.forfait;
+  if(h > 0 || m > 0) {
+     texteForfait = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : "");
+  }
   
   let payload = {
     nom: document.getElementById('editNom').value.trim(),
@@ -543,7 +533,7 @@ async function validerEditionComplete() {
   };
 
   if (payload.statut === 'actif') {
-    let baseDate = (c.statut === 'actif' && c.expire) ? new Date(c.date) : new Date();
+    let baseDate = new Date();
     baseDate.setHours(baseDate.getHours() + h); baseDate.setMinutes(baseDate.getMinutes() + m);
     payload.expire = baseDate.toISOString(); payload.alerte = false;
   } else if (payload.statut === 'expiré') {
@@ -590,36 +580,7 @@ async function activer(i){
   chargerPermanence();
 }
 
-function ouvrirModalProlongation(i) {
-  indexEnCours = i; let c = clients[i];
-  document.getElementById('prolongarTitre').textContent = `➕ Prolonger : ${c.nom}`;
-  document.getElementById('modalHeures').value = ""; document.getElementById('modalMinutes').value = "30";
-  calculerPrixAutomatiqueModal(); document.getElementById('prolongarModal').classList.add('active');
-}
-
-async function validerProlongation() {
-  if (indexEnCours === null) return; let c = clients[indexEnCours];
-  let h = parseInt(document.getElementById('modalHeures').value) || 0;
-  let m = parseInt(document.getElementById('modalMinutes').value) || 0;
-  let baseDate = (c.statut === 'actif' && c.expire) ? new Date(c.expire) : new Date();
-  baseDate.setMinutes(baseDate.getMinutes() + (h * 60) + m);
-  
-  let texteAjout = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? " + " + m + " min" : "");
-
-  await fetch(`/api/clients/${c.id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      statut: 'actif', expire: baseDate.toISOString(), alerte: false,
-      montant: (parseInt(c.montant) || 0) + (parseInt(document.getElementById('modalMontant').value) || 0),
-      forfait: c.forfait + " + " + texteAjout
-    })
-  });
-  fermerModal(); chargerPermanence();
-}
-
-function fermerModal() { document.getElementById('prolongarModal').classList.remove('active'); indexEnCours = null; }
-function abrirModalConfirm(i) { ouvrirModalConfirm(i); } // Fallback sécurisé pour l'ancienne liaison
+function abrirModalConfirm(i) { ouvrirModalConfirm(i); }
 function ouvrirModalConfirm(i) { indexSuppressionEnCours = i; document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; document.getElementById('btnConfirmOk').onclick = validerSuppression; document.getElementById('confirmModal').classList.add('active'); }
 
 async function validerSuppression() {
@@ -629,7 +590,6 @@ async function validerSuppression() {
   }
 }
 function fermerModalConfirm() { document.getElementById('confirmModal').classList.remove('active'); indexSuppressionEnCours = null; }
-
 function filtrer(){ afficher(document.getElementById('search').value); }
 
 async function verifier(){
@@ -657,7 +617,7 @@ window.onload = chargerPermanence;
 </html>
 """
 
-# --- ROUTES LOGIQUE BACKEND ---
+# --- LOGIQUE BACKEND ---
 @app.route('/')
 @login_required
 def index():
@@ -684,7 +644,6 @@ def register():
             return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer le compte", action="register")
         h = generate_password_hash(request.form['password'])
         new_u = User(username=request.form['username'], password=h)
-        db.create_all()
         db.session.add(new_u)
         db.session.commit()
         login_user(new_u)
