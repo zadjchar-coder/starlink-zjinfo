@@ -58,6 +58,21 @@ class Client(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# --- INITIALISATION AUTOMATIQUE DES TABLES POUR GUNICORN ---
+_db_initialized = False
+
+@app.before_request
+def initialize_database_if_needed():
+    global _db_initialized
+    if not _db_initialized:
+        db.create_all()
+        # Création de l'admin par défaut si la table est vide
+        if not User.query.filter_by(username='admin').first():
+            admin_user = User(username='admin', password=generate_password_hash('admin123'))
+            db.session.add(admin_user)
+            db.session.commit()
+        _db_initialized = True
+
 # --- DESIGN D'AUTHENTIFICATION COMPLET ---
 AUTH_HTML = """
 <!DOCTYPE html>
@@ -285,24 +300,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
   </div>
 </div>
 
-<div class="modal-overlay" id="prolongarModal">
-  <div class="modal-box">
-    <div class="list-title" id="prolongarTitre" style="color:#10B981">🕒 Ajouter du temps</div>
-    <div class="modal-info" id="modalEtatActuel">Calcul...</div>
-    <label>Temps additionnel</label>
-    <div class="edit-time-grid">
-      <div><span style="font-size:12px; color:#9CA3AF">Heure(s)</span><input id="modalHeures" type="number" placeholder="0" min="0" oninput="calculerPrixAutomatiqueModal()"></div>
-      <div><span style="font-size:12px; color:#9CA3AF">Minute(s)</span><input id="modalMinutes" type="number" placeholder="30" min="0" oninput="calculerPrixAutomatiqueModal()"></div>
-    </div>
-    <label>Montant supplémentaire (Ar)</label>
-    <input id="modalMontant" type="number" value="500" min="0">
-    <div class="btn-group">
-      <button class="btn-green" onclick="validerProlongation()">Valider</button>
-      <button class="btn-secondary" onclick="fermerModal()">Annuler</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="editModal">
   <div class="modal-box">
     <div class="list-title" id="editModalTitre" style="color:#3B82F6">📝 Modifier la fiche</div>
@@ -376,12 +373,6 @@ function calculerPrixAutomatique() {
   document.getElementById('montant').value = (heures * 1000) + Math.round(minutes * (500 / 30));
 }
 
-function calculerPrixAutomatiqueModal() {
-  let heures = parseInt(document.getElementById('modalHeures').value) || 0;
-  let minutes = parseInt(document.getElementById('modalMinutes').value) || 0;
-  document.getElementById('modalMontant').value = (heures * 1000) + Math.round(minutes * (500 / 30));
-}
-
 function sonnerAlerte(nom, forfait){
   alerteAudio.currentTime = 0; alerteAudio.play().catch(e => {});
   if(navigator.vibrate) { navigator.vibrate([600, 250, 600]); }
@@ -411,7 +402,7 @@ function filtrerParStatut(statut) {
   document.querySelectorAll('.stat-card').forEach(card => card.classList.remove('active-filter'));
   
   if (statut === 'tous') document.getElementById('card-all').classList.add('active-filter');
-  else if (statut === 'actif') document.getElementById('card-actifs').classList.add('active-filter');
+  else if (statut === 'actif') document.getElementById('card-actif').classList.add('active-filter');
   else if (statut === 'attente') document.getElementById('card-attente').classList.add('active-filter');
   else if (statut === 'expiré') document.getElementById('card-expiré').classList.add('active-filter');
   
@@ -440,7 +431,7 @@ function afficher(filtreTexte=''){
       let badge = c.statut==='actif'?'badge-actif':c.statut==='attente'?'badge-attente':'badge-expire';
       let actions = c.statut==='attente' 
         ? `<button class="btn-sm btn-green" onclick="event.stopPropagation(); activer(${idx})">Activer</button>`
-        : `<button class="btn-sm btn-green" onclick="event.stopPropagation(); ouvrirModalProlongation(${idx})">${c.statut==='actif'?'+Temps':'Relancer'}</button>`;
+        : `<button class="btn-sm btn-green" onclick="event.stopPropagation(); relancerOptionnel(${idx})">Relancer</button>`;
       actions += `<button class="btn-sm btn-red" onclick="event.stopPropagation(); ouvrirModalConfirm(${idx})">Suppr</button>`;
 
       let expireDisplay = c.statut==='actif'? getCountdown(c.expire) : formatDate(c.expire);
@@ -509,6 +500,7 @@ function ouvrirModalEditionComplete(i) {
   indexEnCours = parseInt(i); let c = clients[indexEnCours]; if(!c) return;
   document.getElementById('editNom').value = c.nom; document.getElementById('editMontant').value = c.montant;
   document.getElementById('editMac').value = c.mac || ''; document.getElementById('editStatut').value = c.statut;
+  document.getElementById('editHeures').value = ''; document.getElementById('editMinutes').value = '';
   document.getElementById('editModal').classList.add('active');
 }
 
@@ -578,6 +570,19 @@ async function activer(i){
   chargerPermanence();
 }
 
+async function relancerOptionnel(i) {
+  let c = clients[i]; let now = new Date(); let totalMin = 0;
+  if(c.forfait){
+    c.forfait.split('+').forEach(seg => {
+      let num = parseInt(seg.trim()) || 0;
+      if (seg.includes('Heure')) totalMin += num * 60; else if (seg.includes('min')) totalMin += num;
+    });
+  }
+  now.setMinutes(now.getMinutes() + totalMin);
+  await fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'actif', expire: now.toISOString(), alerte: false }) });
+  chargerPermanence();
+}
+
 function ouvrirModalConfirm(i) { indexSuppressionEnCours = i; document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; document.getElementById('btnConfirmOk').onclick = validerSuppression; document.getElementById('confirmModal').classList.add('active'); }
 
 async function validerSuppression() {
@@ -614,7 +619,7 @@ window.onload = chargerPermanence;
 </html>
 """
 
-# --- LOGIQUE BACKEND AVEC AUTO-ADMIN ---
+# --- LOGIQUE BACKEND AVEC AUTO-ADMIN COMPATIBLE GUNICORN ---
 @app.route('/')
 @login_required
 def index():
@@ -684,11 +689,4 @@ def api_client_detail(cid):
     return jsonify(c.to_dict())
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        # --- ENREGISTREMENT SÉCURISÉ DE L'ADMIN PAR DÉFAUT ---
-        if not User.query.filter_by(username='admin').first():
-            admin_user = User(username='admin', password=generate_password_hash('admin123'))
-            db.session.add(admin_user)
-            db.session.commit()
     app.run(debug=True)
