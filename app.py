@@ -3,7 +3,7 @@ from flask import Flask, render_template_string, request, jsonify, redirect, url
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'une_cle_secrete_tres_difficile_a_deviner_12345'
@@ -58,7 +58,7 @@ class Client(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --- INITIALISATION AUTOMATIQUE DES TABLES POUR GUNICORN ---
+# --- INITIALISATION AUTOMATIQUE DES TABLES ---
 _db_initialized = False
 
 @app.before_request
@@ -66,14 +66,13 @@ def initialize_database_if_needed():
     global _db_initialized
     if not _db_initialized:
         db.create_all()
-        # Création de l'admin par défaut si la table est vide
         if not User.query.filter_by(username='admin').first():
             admin_user = User(username='admin', password=generate_password_hash('admin123'))
             db.session.add(admin_user)
             db.session.commit()
         _db_initialized = True
 
-# --- DESIGN D'AUTHENTIFICATION COMPLET ---
+# --- DESIGN D'AUTHENTIFICATION ---
 AUTH_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -200,6 +199,11 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 .time-input-container {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
 .edit-time-grid {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
 
+/* STYLES POUR LA VUE BÉNÉFICES */
+.benefice-table th { background: #1F2937; color: #3B82F6; font-size: 13px; padding: 16px 12px; }
+.benefice-table td { font-size: 15px; padding: 16px 12px; font-weight: 500; }
+.valeur-gain { color: #10B981; font-weight: 700; font-family: 'Courier New', monospace; }
+
 .modal-overlay {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(5, 8, 22, 0.85); backdrop-filter: blur(4px);
@@ -214,7 +218,6 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
   transform: scale(0.95); transition: transform 0.20s ease;
 }
 .modal-overlay.active .modal-box { transform: scale(1); }
-.modal-info { background: #1F2937; padding: 12px; border-radius: 10px; margin-top: 8px; font-size: 13px; color: #9CA3AF; border-left: 4px solid #3B82F6; }
 .hint-longpress { text-align: center; color: #6B7280; font-size: 11px; margin-top: 4px; }
 .alert-title { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .alert-text { font-size: 14px; color: #E5E7EB; text-align: center; margin-bottom: 20px; line-height: 1.5; }
@@ -235,12 +238,12 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 
 <div class="container">
   <div class="stats">
-    <div class="stat-card" id="card-all" onclick="filtrerParStatut('tous')"><div class="stat-label">Total Clients</div><div class="stat-value" id="total">0</div></div>
-    <div class="stat-card" id="card-attente" onclick="filtrerParStatut('attente')"><div class="stat-label">En Attente</div><div class="stat-value" style="color:#F59E0B" id="attente">0</div></div>
-    <div class="stat-card" id="card-actif" onclick="filtrerParStatut('actif')"><div class="stat-label">Actifs</div><div class="stat-value" style="color:#10B981" id="actifs">0</div></div>
-    <div class="stat-card" id="card-expiré" onclick="filtrerParStatut('expiré')"><div class="stat-label">Expirés</div><div class="stat-value" style="color:#EF4444" id="expires">0</div></div>
-    <div class="stat-card" id="card-caisse" onclick="filtrerParStatut('tous')">
-      <div class="stat-label">Encaissé Total</div>
+    <div class="stat-card" id="card-all" onmouseenter="filtrerParStatut('tous')"><div class="stat-label">Total Clients</div><div class="stat-value" id="total">0</div></div>
+    <div class="stat-card" id="card-attente" onmouseenter="filtrerParStatut('attente')"><div class="stat-label">En Attente</div><div class="stat-value" style="color:#F59E0B" id="attente">0</div></div>
+    <div class="stat-card" id="card-actif" onmouseenter="filtrerParStatut('actif')"><div class="stat-label">Actifs</div><div class="stat-value" style="color:#10B981" id="actifs">0</div></div>
+    <div class="stat-card" id="card-expiré" onmouseenter="filtrerParStatut('expiré')"><div class="stat-label">Expirés</div><div class="stat-value" style="color:#EF4444" id="expires">0</div></div>
+    <div class="stat-card" id="card-caisse" onclick="basculerVue('benefices')">
+      <div class="stat-label">💲 Encaissé Total</div>
       <div class="stat-value" style="color:#3B82F6" id="caisse">0 Ar</div>
       <div class="caisse-detail">
         Jour : <span id="caisse-jour">0 Ar</span><br>
@@ -250,54 +253,100 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
     </div>
   </div>
 
-  <div class="card">
-    <div class="list-title" style="margin-bottom:16px">👤 Ajouter un client</div>
-    <label>Nom du client</label>
-    <input id="nom" placeholder="Ex: zino">
-    
-    <label>Ajuster la durée</label>
-    <div class="time-input-container">
-      <div>
-        <span style="font-size:12px; color:#9CA3AF">Heure(s)</span>
-        <input id="ajoutHeures" type="number" placeholder="Ex: 1" min="0" oninput="calculerPrixAutomatique()">
+  <div id="vue-clients">
+    <div class="card">
+      <div class="list-title" style="margin-bottom:16px">👤 Ajouter un client</div>
+      <label>Nom du client</label>
+      <input id="nom" placeholder="Ex: zino">
+      
+      <label>Ajuster la durée</label>
+      <div class="time-input-container">
+        <div>
+          <span style="font-size:12px; color:#9CA3AF">Heure(s)</span>
+          <input id="ajoutHeures" type="number" placeholder="Ex: 1" min="0" oninput="calculerPrixAutomatique()">
+        </div>
+        <div>
+          <span style="font-size:12px; color:#9CA3AF">Minute(s)</span>
+          <input id="ajoutMinutes" type="number" placeholder="Ex: 5" min="0" max="59" oninput="calculerPrixAutomatique()">
+        </div>
       </div>
-      <div>
-        <span style="font-size:12px; color:#9CA3AF">Minute(s)</span>
-        <input id="ajoutMinutes" type="number" placeholder="Ex: 5" min="0" max="59" oninput="calculerPrixAutomatique()">
+      
+      <label>Montant (Ariary)</label>
+      <input id="montant" type="number" placeholder="Ex: 1000" min="0">
+      
+      <label>Adresse MAC (optionnel)</label>
+      <input id="mac" placeholder="00:1A:2B:3C:4D:5E">
+      <button onclick="ajouter()">+ Ajouter le client</button>
+    </div>
+
+    <div class="card">
+      <div class="list-header">
+        <div class="list-title" id="titre-liste-clients">📋 Liste des clients</div>
+        <input class="search" placeholder="Rechercher..." id="search" oninput="filtrer()">
+      </div>
+      <p class="hint-longpress">💡 Appuyez longuement sur une ligne pour modifier les détails du client</p>
+      <div style="overflow-x:auto; margin-top:8px">
+      <table>
+        <thead>
+          <tr>
+            <th>DATE</th>
+            <th>NOM</th>
+            <th>FORFAIT</th>
+            <th>MONTANT</th>
+            <th>EXPIRE / CHRONO</th>
+            <th>STATUT</th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
       </div>
     </div>
-    
-    <label>Montant (Ariary)</label>
-    <input id="montant" type="number" placeholder="Ex: 1000" min="0">
-    
-    <label>Adresse MAC (optionnel)</label>
-    <input id="mac" placeholder="00:1A:2B:3C:4D:5E">
-    <button onclick="ajouter()">+ Ajouter le client</button>
   </div>
 
-  <div class="card">
-    <div class="list-header">
-      <div class="list-title" id="titre-liste-clients">📋 Liste des clients</div>
-      <input class="search" placeholder="Rechercher..." id="search" oninput="filtrer()">
-    </div>
-    <p class="hint-longpress">💡 Appuyez longuement sur une ligne pour modifier les détails du client</p>
-    <div style="overflow-x:auto; margin-top:8px">
-    <table>
-      <thead>
-        <tr>
-          <th>DATE</th>
-          <th>NOM</th>
-          <th>FORFAIT</th>
-          <th>MONTANT</th>
-          <th>EXPIRE / CHRONO</th>
-          <th>STATUT</th>
-          <th>ACTIONS</th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
+  <div id="vue-benefices" style="display: none;">
+    <div class="card">
+      <div class="list-header" style="border-bottom: 1px solid #1F2937; padding-bottom: 12px; margin-bottom: 20px;">
+        <div class="list-title" style="font-size: 22px; color: #10B981;">📊 Tableau de bord des Bénéfices</div>
+        <button class="btn-sm btn-secondary" onclick="basculerVue('clients')" style="padding: 10px 18px; font-size: 14px;">⬅️ Retour aux clients</button>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="benefice-table">
+          <thead>
+            <tr>
+              <th>PÉRIODE DE VENTE</th>
+              <th>CHIFFRE D'AFFAIRES GÉNÉRÉ (AR)</th>
+              <th>NOMBRE DE TRANSACTIONS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>📅 Aujourd'hui</td>
+              <td class="valeur-gain" id="gain-jour">0 Ar</td>
+              <td id="count-jour" style="color: #9CA3AF;">0 txn</td>
+            </tr>
+            <tr>
+              <td>🗓️ Cette Semaine (7 derniers jours)</td>
+              <td class="valeur-gain" id="gain-semaine" style="color: #3B82F6;">0 Ar</td>
+              <td id="count-semaine" style="color: #9CA3AF;">0 txn</td>
+            </tr>
+            <tr>
+              <td>🌙 Ce Mois-ci</td>
+              <td class="valeur-gain" id="gain-mois" style="color: #F59E0B;">0 Ar</td>
+              <td id="count-mois" style="color: #9CA3AF;">0 txn</td>
+            </tr>
+            <tr>
+              <td>🚀 Cette Année</td>
+              <td class="valeur-gain" id="gain-an" style="color: #A855F7;">0 Ar</td>
+              <td id="count-an" style="color: #9CA3AF;">0 txn</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
+
 </div>
 
 <div class="modal-overlay" id="editModal">
@@ -365,6 +414,21 @@ async function chargerPermanence() {
   } catch(e) { console.error(e); }
 }
 
+function basculerVue(vue) {
+  if (vue === 'benefices') {
+    document.getElementById('vue-clients').style.display = 'none';
+    document.getElementById('vue-benefices').style.display = 'block';
+    document.getElementById('card-caisse').classList.add('active-filter');
+    // Enlever la sélection des autres filtres
+    document.querySelectorAll('.stat-card:not(#card-caisse)').forEach(c => c.classList.remove('active-filter'));
+  } else {
+    document.getElementById('vue-benefices').style.display = 'none';
+    document.getElementById('vue-clients').style.display = 'block';
+    document.getElementById('card-caisse').classList.remove('active-filter');
+    filtrerParStatut(statutFiltreActuel);
+  }
+}
+
 function calculerPrixAutomatique() {
   let hInput = document.getElementById('ajoutHeures').value;
   let mInput = document.getElementById('ajoutMinutes').value;
@@ -399,6 +463,11 @@ function getCountdown(expire){
 
 function filtrerParStatut(statut) {
   statutFiltreActuel = statut;
+  if (document.getElementById('vue-clients').style.display === 'none') {
+    // Si on est dans les bénéfices, le survol ne doit pas tout casser visuellement
+    return;
+  }
+  
   document.querySelectorAll('.stat-card').forEach(card => card.classList.remove('active-filter'));
   
   if (statut === 'tous') document.getElementById('card-all').classList.add('active-filter');
@@ -450,26 +519,42 @@ function afficher(filtreTexte=''){
 
   document.getElementById('tbody').innerHTML = html;
   
-  // CALCULS COMPTEURS TEMPORELS
+  // CALCULS COMPTEURS TEMPORELS & STATISTIQUES AVANCÉES
   let maintenant = new Date();
-  let totalJour = 0, totalMois = 0, totalAn = 0;
+  let totalJour = 0, txJour = 0;
+  let totalSemaine = 0, txSemaine = 0;
+  let totalMois = 0, txMois = 0;
+  let totalAn = 0, txAn = 0;
+
+  // Calcul d'il y a 7 jours à minuit
+  let uneSemaineAgo = new Date();
+  uneSemaineAgo.setDate(maintenant.getDate() - 7);
+  uneSemaineAgo.setHours(0,0,0,0);
 
   clients.forEach(c => {
     if (!c.date) return;
     let dateClient = new Date(c.date);
     let montant = parseInt(c.montant) || 0;
 
+    // Calcul Année
     if (dateClient.getFullYear() === maintenant.getFullYear()) {
-      totalAn += montant;
+      totalAn += montant; txAn++;
+      // Calcul Mois
       if (dateClient.getMonth() === maintenant.getMonth()) {
-        totalMois += montant;
+        totalMois += montant; txMois++;
+        // Calcul Jour
         if (dateClient.getDate() === maintenant.getDate()) {
-          totalJour += montant;
+          totalJour += montant; txJour++;
         }
       }
     }
+    // Calcul Semaine Glissante (7 derniers jours)
+    if (dateClient >= uneSemaineAgo) {
+      totalSemaine += montant; txSemaine++;
+    }
   });
 
+  // Mettre à jour les widgets du haut
   document.getElementById('total').textContent = clients.length;
   document.getElementById('attente').textContent = clients.filter(c=>c.statut==='attente').length;
   document.getElementById('actifs').textContent = clients.filter(c=>c.statut==='actif').length;
@@ -479,6 +564,19 @@ function afficher(filtreTexte=''){
   document.getElementById('caisse-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('caisse-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('caisse-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
+
+  // Mettre à jour le tableau complet de la page des bénéfices
+  document.getElementById('gain-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
+  document.getElementById('count-jour').textContent = txJour + ' transaction' + (txJour > 1 ? 's' : '');
+
+  document.getElementById('gain-semaine').textContent = totalSemaine.toLocaleString('fr-FR') + ' Ar';
+  document.getElementById('count-semaine').textContent = txSemaine + ' transaction' + (txSemaine > 1 ? 's' : '');
+
+  document.getElementById('gain-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
+  document.getElementById('count-mois').textContent = txMois + ' transaction' + (txMois > 1 ? 's' : '');
+
+  document.getElementById('gain-an').textContent = totalAn.toLocaleString('fr-FR') + ' Ar';
+  document.getElementById('count-an').textContent = txAn + ' transaction' + (txAn > 1 ? 's' : '');
 
   attacherEvenementsAppuiLong();
 }
@@ -617,76 +715,3 @@ window.onload = chargerPermanence;
 </script>
 </body>
 </html>
-"""
-
-# --- LOGIQUE BACKEND AVEC AUTO-ADMIN COMPATIBLE GUNICORN ---
-@app.route('/')
-@login_required
-def index():
-    return render_template_string(HTML_CONTENT)
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    if request.method == 'POST':
-        u = User.query.filter_by(username=request.form['username']).first()
-        if u and check_password_hash(u.password, request.form['password']):
-            login_user(u)
-            return redirect(url_for('index'))
-        flash("Identifiants incorrects.")
-    return render_template_string(AUTH_HTML, title="Connexion", btn_text="Se connecter", action="login")
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        exist = User.query.filter_by(username=request.form['username']).first()
-        if exist:
-            flash("Ce nom d'utilisateur est déjà pris.")
-            return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer le compte", action="register")
-        h = generate_password_hash(request.form['password'])
-        new_u = User(username=request.form['username'], password=h)
-        db.session.add(new_u)
-        db.session.commit()
-        login_user(new_u)
-        return redirect(url_for('index'))
-    return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer le compte", action="register")
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('login'))
-
-@app.route('/api/clients', methods=['GET', 'POST'])
-@login_required
-def api_clients():
-    if request.method == 'POST':
-        data = request.json
-        c = Client(nom=data['nom'], forfait=data['forfait'], montant=data['montant'], mac=data.get('mac'))
-        db.session.add(c)
-        db.session.commit()
-        return jsonify(c.to_dict())
-    return jsonify([c.to_dict() for c in Client.query.order_by(Client.id.desc()).all()])
-
-@app.route('/api/clients/<int:cid>', methods=['PUT', 'DELETE'])
-@login_required
-def api_client_detail(cid):
-    c = Client.query.get_or_404(cid)
-    if request.method == 'DELETE':
-        db.session.delete(c)
-        db.session.commit()
-        return jsonify({"success": True})
-    data = request.json
-    if 'nom' in data: c.nom = data['nom']
-    if 'montant' in data: c.montant = data['montant']
-    if 'mac' in data: c.mac = data['mac']
-    if 'statut' in data: c.statut = data['statut']
-    if 'forfait' in data: c.forfait = data['forfait']
-    if 'expire' in data: c.expire = data['expire']
-    if 'alerte' in data: c.alerte = data['alerte']
-    db.session.commit()
-    return jsonify(c.to_dict())
-
-if __name__ == '__main__':
-    app.run(debug=True)
