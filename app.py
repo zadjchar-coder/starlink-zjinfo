@@ -1,15 +1,29 @@
 import os
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'une_cle_secrete_tres_difficile_a_deviner_12345'
 
 # Configuration de la base de données SQLite sur Render
 db_path = os.path.join(os.path.dirname(__file__), 'starlink.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# Configuration de Flask-Login
+login_manager = LoginManager()
+login_manager.login_view = 'login'
+login_manager.init_app(app)
+
+# Modèle de données pour les Utilisateurs (Comptes Administrateurs)
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(250), nullable=False)
 
 # Modèle de données pour la table Client
 class Client(db.Model):
@@ -36,7 +50,73 @@ class Client(db.Model):
             "alerte": self.alerte
         }
 
-# --- Interface HTML / CSS / JavaScript intégrée ---
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# --- DESIGN DES PAGES D'AUTHENTIFICATION (CONNEXION / INSCRIPTION) ---
+AUTH_HTML = """
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Starlink ZJinfo - {{ title }}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0B132B;color:#fff;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.auth-card{background:#111827;border:1px solid #1F2937;border-radius:20px;padding:32px;width:100%;max-width:400px;box-shadow:0 10px 25px rgba(0,0,0,0.5)}
+.logo{text-align:center;font-size:40px;margin-bottom:10px}
+h2{text-align:center;color:#3B82F6;margin-bottom:8px;font-size:24px}
+p.subtitle{text-align:center;color:#94A3B8;font-size:14px;margin-bottom:24px}
+label{display:block;color:#D1D5DB;font-size:14px;margin-bottom:6px;font-weight:500}
+input{width:100%;padding:12px;background:#1F2937;border:1px solid #374151;border-radius:10px;color:#fff;font-size:15px;margin-bottom:16px}
+input:focus{outline:none;border-color:#3B82F6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+button{width:100%;padding:14px;background:#2563EB;border:none;border-radius:10px;color:#fff;font-weight:600;font-size:16px;cursor:pointer;transition:0.2s;margin-top:8px}
+button:hover{background:#1D4ED8}
+.footer-link{text-align:center;margin-top:20px;font-size:14px;color:#9CA3AF}
+.footer-link a{color:#3B82F6;text-decoration:none;font-weight:600}
+.footer-link a:hover{text-decoration:underline}
+.alert{background:#FEE2E2;color:#991B1B;padding:12px;border-radius:10px;font-size:14px;margin-bottom:16px;text-align:center;font-weight:500}
+</style>
+</head>
+<body>
+<div class="auth-card">
+  <div class="logo">📡</div>
+  <h2>{{ title }}</h2>
+  <p class="subtitle">Gestion WiFi Starlink ZJinfo</p>
+  
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <form method="POST">
+    <label>Nom d'utilisateur</label>
+    <input name="username" placeholder="Ex: admin" required autocomplete="off">
+    
+    <label>Mot de passe</label>
+    <input type="password" name="password" placeholder="••••••••" required>
+    
+    <button type="submit">{{ btn_text }}</button>
+  </form>
+
+  <div class="footer-link">
+    {% if action == 'login' %}
+      Pas encore de compte ? <a href="{{ url_for('register') }}">S'inscrire</a>
+    {% else %}
+      Déjà un compte ? <a href="{{ url_for('login') }}">Se connecter</a>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>
+"""
+
+# --- INTERFACE PRINCIPALE (TABLEAU DE BORD PROTEGÉ) ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -48,10 +128,13 @@ HTML_CONTENT = """
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0B132B;color:#fff;font-family:system-ui,-apple-system,sans-serif;-webkit-user-select:none;user-select:none}
-.header{background:#0B132B;padding:16px;border-bottom:1px solid #1C2541;display:flex;align-items:center;gap:12px}
+.header{background:#0B132B;padding:16px;border-bottom:1px solid #1C2541;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.header-left{display:flex;align-items:center;gap:12px}
 .header-icon{background:#2563EB;padding:10px;border-radius:12px;font-size:20px}
 .header h1{color:#3B82F6;font-size:22px;font-weight:700}
 .header p{color:#94A3B8;font-size:13px}
+.btn-logout{background:#374151;padding:8px 14px;border-radius:8px;color:#fff;text-decoration:none;font-size:13px;font-weight:600;border:1px solid #4B5563;transition:0.2s}
+.btn-logout:hover{background:#EF4444;border-color:#DC2626}
 .container{padding:16px;max-width:1200px;margin:0 auto}
 .card{background:#111827;border:1px solid #1F2937;border-radius:16px;padding:20px;margin-bottom:16px}
 label{display:block;color:#D1D5DB;font-size:14px;margin-bottom:6px;margin-top:12px;font-weight:500}
@@ -120,11 +203,14 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 <body>
 
 <div class="header">
-  <div class="header-icon">📡</div>
-  <div>
-    <h1>Starlink ZJinfo</h1>
-    <p>Gestion WiFi - Base de données Cloud</p>
+  <div class="header-left">
+    <div class="header-icon">📡</div>
+    <div>
+      <h1>Starlink ZJinfo</h1>
+      <p>Session active : <strong style="color:#10B981;">{{ current_user.username }}</strong></p>
+    </div>
   </div>
+  <a href="{{ url_for('logout') }}" class="btn-logout">🚪 Déconnexion</a>
 </div>
 
 <div class="container">
@@ -511,13 +597,65 @@ window.onload = chargerPermanence;
 </html>
 """
 
-# --- Routes API Flask ---
+# --- ROUTES D'AUTHENTIFICATION ---
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username').strip()
+        password = request.form.get('password')
+        
+        user_exists = User.query.filter_by(username=username).first()
+        if user_exists:
+            flash("Ce nom d'utilisateur est déjà pris.")
+            return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer mon compte", action="register")
+        
+        # Cryptage du mot de passe
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+        new_user = User(username=username, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+        
+        flash("Compte créé avec succès ! Connectez-vous.")
+        return redirect(url_for('login'))
+        
+    return render_template_string(AUTH_HTML, title="Inscription", btn_text="Créer mon compte", action="register")
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username').strip()
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        if not user or not check_password_hash(user.password, password):
+            flash("Identifiants incorrects. Veuillez réessayer.")
+            return render_template_string(AUTH_HTML, title="Connexion", btn_text="Se connecter", action="login")
+        
+        login_user(user)
+        return redirect(url_for('index'))
+        
+    return render_template_string(AUTH_HTML, title="Connexion", btn_text="Se connecter", action="login")
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# --- ROUTES DE L'APPLICATION PRINCIPALE (PROTÉGÉES PAR @LOGIN_REQUIRED) ---
 
 @app.route('/')
+@login_required
 def index():
     return render_template_string(HTML_CONTENT)
 
 @app.route('/api/clients', methods=['GET'])
+@login_required
 def get_clients():
     try:
         clients = Client.query.order_by(Client.date.desc()).all()
@@ -526,6 +664,7 @@ def get_clients():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clients', methods=['POST'])
+@login_required
 def add_client():
     data = request.get_json()
     new_client = Client(
@@ -539,6 +678,7 @@ def add_client():
     return jsonify(new_client.to_dict()), 201
 
 @app.route('/api/clients/<int:id>', methods=['PUT'])
+@login_required
 def update_client(id):
     client = Client.query.get_or_404(id)
     data = request.get_json()
@@ -555,17 +695,17 @@ def update_client(id):
     return jsonify(client.to_dict())
 
 @app.route('/api/clients/<int:id>', methods=['DELETE'])
+@login_required
 def delete_client(id):
     client = Client.query.get_or_404(id)
     db.session.delete(client)
     db.session.commit()
     return jsonify({"message": "Client supprime"}), 200
 
-# Création automatique de la base de données au démarrage
+# Création automatique des tables (Client et User) au démarrage
 with app.app_context():
     db.create_all()
 
-# Configuration optimale requise pour l'environnement Render
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
