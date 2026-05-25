@@ -466,7 +466,7 @@ td{padding:14px 8px;border-bottom:1px solid #1F2937;color:#E5E7EB;vertical-align
 let clients = [];
 let statutFiltreActuel = 'tous';
 let indexEnCours = null;
-let modeProlongationSeule = false; // Permet de basculer la popup en mode ajout direct ou édition complète
+let modeProlongationSeule = false; 
 let indexSuppressionEnCours = null;
 let ignoreNextClick = false; 
 let alerteAudio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3'); 
@@ -506,7 +506,7 @@ function calculerPrixAutomatique() {
 }
 
 function calculerPrixEditionAutomatique() {
-  if(!modeProlongationSeule) return; // Ne pas interférer en mode édition manuelle brute
+  if(!modeProlongationSeule) return; 
   let i = indexEnCours; if(i === null) return;
   let c = clients[i];
   
@@ -675,7 +675,7 @@ function mettreAJourPopupsChrono() {
   });
 
   document.getElementById('pop-all').innerHTML = popAll.join('') || '<div style="font-size:12px;color:#6B7280">Aucun client</div>';
-  document.getElementById('pop-attente').innerHTML = popAttente.join('') || '<div style="font-size:12px;color:#6B7280">Aucun client en attente</div>';
+  document.getElementById('pop-attente').innerHTML = popAttente.push(itemHtml) || '<div style="font-size:12px;color:#6B7280">Aucun client en attente</div>';
   document.getElementById('pop-actifs').innerHTML = popActif.join('') || '<div style="font-size:12px;color:#6B7280">Aucun client actif</div>';
   document.getElementById('pop-expires').innerHTML = popExpire.join('') || '<div style="font-size:12px;color:#6B7280">Aucun forfait expiré</div>';
   
@@ -703,7 +703,6 @@ function attacherEvenementsAppuiLong() {
   });
 }
 
-// Fonction pour Ouvrir en Mode PROLONGATION (Cumul automatique du forfait et de l'argent)
 function ouvrirModalProlonger(i) {
   ouvrirModalEditionComplete(i, true);
 }
@@ -748,25 +747,21 @@ async function validerEditionComplete() {
   let baseDate = new Date();
 
   if (modeProlongationSeule) {
-    // 1. Calcul du cumul du texte de forfait
     if (h > 0 || m > 0) {
       let segmentAjout = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : "");
       texteForfait = c.forfait + " + " + segmentAjout;
     }
     
-    // 2. Prolongation intelligente du Chrono restant
     let minutesAjoutTotal = (h * 60) + m;
     if (c.statut === 'actif' && c.expire) {
       let expireActuelle = new Date(c.expire);
       if (expireActuelle > baseDate) {
-        // Le client a encore du temps, on ajoute les minutes à la suite de sa fin théorique
         baseDate = expireActuelle;
       }
     }
     baseDate.setMinutes(baseDate.getMinutes() + minutesAjoutTotal);
 
   } else {
-    // Mode édition classique (Brute)
     if (h > 0 || m > 0) {
       texteForfait = (h > 0 ? h + " Heure" + (h>1?"s":"") : "") + (m > 0 ? (h>0?" + ":"") + m + " min" : "");
     }
@@ -825,7 +820,6 @@ async function activer(e, i){
   chargerPermanence();
 }
 
-// Relance simple du forfait affiché, SANS toucher à la caisse (Montant inchangé)
 async function relancerChronoSeul(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
   let c = clients[i]; let now = new Date(); let totalMin = 0;
@@ -842,7 +836,8 @@ async function relancerChronoSeul(e, i) {
   chargerPermanence();
 }
 
-function abrirModalConfirm(e, i) {
+// CORRECTION ICI : Le nom de la fonction correspond exactement à l'appel du menu déroulant
+function ouvrirModalConfirm(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
   indexSuppressionEnCours = i; 
   document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; 
