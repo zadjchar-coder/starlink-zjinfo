@@ -393,7 +393,7 @@ let clients = [];
 let statutFiltreActuel = 'tous';
 let indexEnCours = null;
 let indexSuppressionEnCours = null;
-let isLongPressing = false;
+let ignoreNextClick = false; // Verrou anti-conflit
 let alerteAudio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3'); 
 alerteAudio.loop = true;
 
@@ -562,7 +562,7 @@ function afficher(filtreTexte=''){
 
   document.getElementById('gain-jour').textContent = totalJour.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-jour').textContent = txJour + ' txn';
-  document.getElementById('gain-semaine').textContent = totalSemaine.toLocaleString('fr-FR) + ' Ar';
+  document.getElementById('gain-semaine').textContent = totalSemaine.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-semaine').textContent = txSemaine + ' txn';
   document.getElementById('gain-mois').textContent = totalMois.toLocaleString('fr-FR') + ' Ar';
   document.getElementById('count-mois').textContent = txMois + ' txn';
@@ -577,11 +577,14 @@ function attacherEvenementsAppuiLong() {
   document.querySelectorAll('.client-row-element').forEach(row => {
     let index = row.getAttribute('data-index');
     
-    let startPress = () => {
-      isLongPressing = false;
+    let startPress = (e) => {
+      // Si la cible touchée est un bouton, on ignore l'appui long
+      if(e.target.tagName.toLowerCase() === 'button') return;
+      
+      ignoreNextClick = false;
       clearTimeout(timerAppuiLong);
       timerAppuiLong = setTimeout(() => {
-        isLongPressing = true;
+        ignoreNextClick = true; // Empêche le clic normal après l'ouverture du modal
         ouvrirModalEditionComplete(index);
       }, 700);
     };
@@ -660,7 +663,7 @@ async function ajouter(){
 
 async function activer(e, i){
   if (e) { e.stopPropagation(); e.preventDefault(); }
-  if (isLongPressing) return;
+  if (ignoreNextClick) return;
   
   let c = clients[i]; let now = new Date(); let totalMin = 0;
   if(c.forfait){
@@ -676,7 +679,7 @@ async function activer(e, i){
 
 async function relancerOptionnel(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
-  if (isLongPressing) return;
+  if (ignoreNextClick) return;
   
   let c = clients[i]; let now = new Date(); let totalMin = 0;
   if(c.forfait){
@@ -692,7 +695,7 @@ async function relancerOptionnel(e, i) {
 
 function ouvrirModalConfirm(e, i) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
-  if (isLongPressing) return;
+  if (ignoreNextClick) return;
   
   indexSuppressionEnCours = i; 
   document.getElementById('confirmModalText').innerHTML = `Supprimer définitivement <strong>${clients[i].nom}</strong> ?`; 
